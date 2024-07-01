@@ -24,7 +24,7 @@
     "@nx/plugin": "19.3.1",
     "@nx/workspace": "19.3.1",
     "@types/jest": "29.4.1",
-    "@types/node": "18.19.34",
+    "@types/node": "18.19.39",
     "@typescript-eslint/eslint-plugin": "7.9.0",
     "@typescript-eslint/parser": "7.9.0",
     "commitizen": "4.3.0",
