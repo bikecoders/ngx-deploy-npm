@@ -16,7 +16,7 @@ jobs:
         run: npx nx lint-report ngx-deploy-npm
 
       - name: Archive lint report results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: lint-report-${{ github.sha }}
           path: reports
@@ -30,7 +30,7 @@ jobs:
       - run: npx nx build ngx-deploy-npm
 
       - name: Archive build result
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: library-dist-${{ github.sha }}
           path: dist
@@ -51,7 +51,7 @@ jobs:
 
       - if: ${{ matrix.os == 'ubuntu-latest' }}
         name: Archive coverage report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ngx-deploy-npm-coverage-report-${{ github.sha }}
           path: coverage/packages/ngx-deploy-npm/lcov.info
