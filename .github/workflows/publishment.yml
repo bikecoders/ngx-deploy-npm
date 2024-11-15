@@ -46,18 +46,12 @@ jobs:
   release:
     environment: production
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     needs: [release-preliminar, e2e-test, test, backwards-compatibility-test]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
-
-      - name: git config
-        shell: bash
-        run: |
-          git config user.name "Github Actions"
-          git config user.email "-"
+        with:
+          git_bot_token: ${{ secrets.GIT_BOT_TOKEN }}
 
       - uses: ./.github/actions/download-build
 
@@ -80,7 +74,7 @@ jobs:
       - name: Push changes
         uses: ad-m/github-push-action@master
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GIT_BOT_TOKEN }}
           branch: ${{ github.ref }}
           force: true
           tags: true
