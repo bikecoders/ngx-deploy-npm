@@ -7,16 +7,14 @@ import { DeployExecutorOptions } from '../schema';
 async function checkIfPackageExists(
   packageName: string,
   version: string,
-  registry?: string
+  npmOptions: NpmPublishOptions
 ): Promise<boolean> {
   try {
-    const registryArg = registry ? `--registry ${registry}` : '';
-
     await spawnAsync('npm', [
       'view',
       `${packageName}@${version}`,
       'version',
-      ...registryArg.split(' ').filter(Boolean),
+      ...getOptionsStringArr(npmOptions),
     ]);
     return true;
   } catch {
@@ -54,13 +52,15 @@ export async function run(
       await setPackageVersion(distFolderPath, options.packageVersion);
     }
 
+    const npmOptions = extractOnlyNPMOptions(options);
+
     // Only check for existing package if explicitly enabled
     if (options.checkExisting) {
       const packageInfo = await getPackageInfo(distFolderPath);
       const exists = await checkIfPackageExists(
         packageInfo.name,
         packageInfo.version,
-        options.registry
+        npmOptions
       );
 
       if (exists) {
@@ -70,8 +70,6 @@ export async function run(
         return;
       }
     }
-
-    const npmOptions = extractOnlyNPMOptions(options);
 
     await spawnAsync('npm', [
       'publish',
