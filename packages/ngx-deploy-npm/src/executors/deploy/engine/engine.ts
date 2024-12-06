@@ -1,5 +1,6 @@
 import { logger } from '@nx/devkit';
-import { readFileSync } from 'fs';
+import * as fileUtils from '../../../utils';
+import * as path from 'path';
 
 import { setPackageVersion, NpmPublishOptions, spawnAsync } from '../utils';
 import { DeployExecutorOptions } from '../schema';
@@ -24,9 +25,11 @@ async function checkIfPackageExists(
 async function getPackageInfo(
   distFolderPath: string
 ): Promise<{ name: string; version: string }> {
-  const packageJson = JSON.parse(
-    readFileSync(`${distFolderPath}/package.json`, 'utf-8')
+  const packageContent = await fileUtils.readFileAsync(
+    path.join(distFolderPath, 'package.json'),
+    { encoding: 'utf8' }
   );
+  const packageJson = JSON.parse(packageContent);
   return {
     name: packageJson.name,
     version: packageJson.version,

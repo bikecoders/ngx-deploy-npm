@@ -4,7 +4,14 @@ import * as engine from './engine';
 import * as spawn from '../utils/spawn-async';
 import * as setPackage from '../utils/set-package-version';
 import { mockProjectDist, mockProjectRoot } from '../../../__mocks__/mocks';
-import * as fs from 'fs';
+import * as fileUtils from '../../../utils';
+
+jest.mock('../../../utils', () => {
+  return {
+    __esModule: true, //    <----- this __esModule: true is important
+    ...jest.requireActual('../../../utils'),
+  };
+});
 
 describe('engine', () => {
   const defaultOption: Readonly<Omit<DeployExecutorOptions, 'distFolderPath'>> =
@@ -136,19 +143,25 @@ describe('engine', () => {
       version: '1.0.0',
     };
 
-    beforeEach(() => {
+    const versionCheckSetup = ({
+      ...originalSetupOptions
+    }: Parameters<typeof setup>[0] = {}) => {
       jest
-        .spyOn(fs, 'readFileSync')
-        .mockReturnValue(JSON.stringify(mockPackageJson));
-    });
+        .spyOn(fileUtils, 'readFileAsync')
+        .mockImplementation(() =>
+          Promise.resolve(JSON.stringify(mockPackageJson))
+        );
+
+      return setup(originalSetupOptions);
+    };
 
     it('should skip publishing when package exists and checkExisting is true', async () => {
-      const { absoluteDistFolderPath, options } = setup({
+      const { absoluteDistFolderPath, options } = versionCheckSetup({
         options: {
           ...defaultOption,
           checkExisting: true,
         },
-        spawnAsyncReturnValue: () => Promise.resolve(), // npm view returns successfully, meaning package exists
+        spawnAsyncReturnValue: () => Promise.resolve(),
       });
 
       await engine.run(absoluteDistFolderPath, {
@@ -171,7 +184,7 @@ describe('engine', () => {
     });
 
     it('should proceed with publishing when package does not exist and checkExisting is true', async () => {
-      const { absoluteDistFolderPath, options } = setup({
+      const { absoluteDistFolderPath, options } = versionCheckSetup({
         options: {
           ...defaultOption,
           checkExisting: true,
@@ -202,7 +215,7 @@ describe('engine', () => {
     });
 
     it('should skip version check when checkExisting is false', async () => {
-      const { absoluteDistFolderPath, options } = setup({
+      const { absoluteDistFolderPath, options } = versionCheckSetup({
         options: {
           ...defaultOption,
           checkExisting: false,
@@ -226,7 +239,7 @@ describe('engine', () => {
 
     it('should respect custom registry when checking package existence', async () => {
       const customRegistry = 'https://custom-registry.com';
-      const { absoluteDistFolderPath, options } = setup({
+      const { absoluteDistFolderPath, options } = versionCheckSetup({
         options: {
           ...defaultOption,
           checkExisting: true,
