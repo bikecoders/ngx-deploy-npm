@@ -4,6 +4,14 @@ import * as engine from './engine';
 import * as spawn from '../utils/spawn-async';
 import * as setPackage from '../utils/set-package-version';
 import { mockProjectDist, mockProjectRoot } from '../../../__mocks__/mocks';
+import * as fileUtils from '../../../utils';
+
+jest.mock('../../../utils', () => {
+  return {
+    __esModule: true, //    <----- this __esModule: true is important
+    ...jest.requireActual('../../../utils'),
+  };
+});
 
 describe('engine', () => {
   const defaultOption: Readonly<Omit<DeployExecutorOptions, 'distFolderPath'>> =
@@ -126,6 +134,86 @@ describe('engine', () => {
       await engine.run(absoluteDistFolderPath, options);
 
       expect(setPackage.setPackageVersion).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Package Version Check Feature', () => {
+    const mockPackageJson = {
+      name: '@test/package',
+      version: '1.0.0',
+    };
+
+    const versionCheckSetup = ({
+      ...originalSetupOptions
+    }: Parameters<typeof setup>[0] = {}) => {
+      jest
+        .spyOn(fileUtils, 'readFileAsync')
+        .mockImplementation(() =>
+          Promise.resolve(JSON.stringify(mockPackageJson))
+        );
+
+      return setup(originalSetupOptions);
+    };
+
+    it('should skip publishing when package exists and checkExisting is warning', async () => {
+      const { absoluteDistFolderPath, options } = versionCheckSetup({
+        options: {
+          ...defaultOption,
+          checkExisting: 'warning',
+        },
+        spawnAsyncReturnValue: () => Promise.resolve(),
+      });
+
+      await engine.run(absoluteDistFolderPath, {
+        ...options,
+        checkExisting: 'warning',
+      });
+
+      // Verify package check was performed
+      expect(spawn.spawnAsync).toHaveBeenCalledWith('npm', [
+        'view',
+        `${mockPackageJson.name}@${mockPackageJson.version}`,
+        'version',
+      ]);
+
+      // Verify publish was not called
+      expect(spawn.spawnAsync).not.toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['publish'])
+      );
+    });
+
+    it('should throw error when package exists and checkExisting is "error"', async () => {
+      const { absoluteDistFolderPath, options } = versionCheckSetup({
+        options: {
+          ...defaultOption,
+          checkExisting: 'error',
+        },
+      });
+
+      // Mock npm view to succeed (package exists)
+      jest
+        .spyOn(spawn, 'spawnAsync')
+        .mockImplementationOnce(() => Promise.resolve());
+
+      // Should throw error when package exists
+      await expect(() =>
+        engine.run(absoluteDistFolderPath, {
+          ...options,
+          checkExisting: 'error',
+        })
+      ).rejects.toThrow();
+
+      // Verify check was performed but publish was not attempted
+      expect(spawn.spawnAsync).toHaveBeenCalledWith('npm', [
+        'view',
+        `${mockPackageJson.name}@${mockPackageJson.version}`,
+        'version',
+      ]);
+      expect(spawn.spawnAsync).not.toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['publish'])
+      );
     });
   });
 });
