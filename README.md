@@ -55,6 +55,7 @@
     - [`--project`](#--project)
     - [`--access`](#--access-install)
   - [deploy](#deploy)
+    - [`--check-existing`](#--check-existing)
     - [`--package-version`](#--package-version)
     - [`--tag`](#--tag)
     - [`--access`](#--access)
@@ -174,6 +175,15 @@ Tells the registry whether to publish the package as public or restricted. It on
 
 Indicate the dist folder path.
 The path must relative to project's root.
+
+#### `--check-existing`
+
+- **optional**
+- Default: `false` (boolean)
+- Example:
+  - `nx deploy --check-existing`
+
+Check if the package version already exists before publishing. Don't publish if it does and exit without error.
 
 #### `--package-version`
 

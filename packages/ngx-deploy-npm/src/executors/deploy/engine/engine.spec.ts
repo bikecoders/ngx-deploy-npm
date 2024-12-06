@@ -4,6 +4,7 @@ import * as engine from './engine';
 import * as spawn from '../utils/spawn-async';
 import * as setPackage from '../utils/set-package-version';
 import { mockProjectDist, mockProjectRoot } from '../../../__mocks__/mocks';
+import * as fs from 'fs';
 
 describe('engine', () => {
   const defaultOption: Readonly<Omit<DeployExecutorOptions, 'distFolderPath'>> =
@@ -126,6 +127,122 @@ describe('engine', () => {
       await engine.run(absoluteDistFolderPath, options);
 
       expect(setPackage.setPackageVersion).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Package Version Check Feature', () => {
+    const mockPackageJson = {
+      name: '@test/package',
+      version: '1.0.0',
+    };
+
+    beforeEach(() => {
+      jest
+        .spyOn(fs, 'readFileSync')
+        .mockReturnValue(JSON.stringify(mockPackageJson));
+    });
+
+    it('should skip publishing when package exists and checkExisting is true', async () => {
+      const { absoluteDistFolderPath, options } = setup({
+        options: {
+          ...defaultOption,
+          checkExisting: true,
+        },
+        spawnAsyncReturnValue: () => Promise.resolve(), // npm view returns successfully, meaning package exists
+      });
+
+      await engine.run(absoluteDistFolderPath, {
+        ...options,
+        checkExisting: true,
+      });
+
+      // Verify package check was performed
+      expect(spawn.spawnAsync).toHaveBeenCalledWith('npm', [
+        'view',
+        `${mockPackageJson.name}@${mockPackageJson.version}`,
+        'version',
+      ]);
+
+      // Verify publish was not called
+      expect(spawn.spawnAsync).not.toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['publish'])
+      );
+    });
+
+    it('should proceed with publishing when package does not exist and checkExisting is true', async () => {
+      const { absoluteDistFolderPath, options } = setup({
+        options: {
+          ...defaultOption,
+          checkExisting: true,
+        },
+      });
+
+      // Mock npm view to fail (package doesn't exist)
+      jest
+        .spyOn(spawn, 'spawnAsync')
+        .mockImplementationOnce(() => Promise.reject(new Error())) // First call (npm view) fails
+        .mockImplementationOnce(() => Promise.resolve()); // Second call (npm publish) succeeds
+
+      await engine.run(absoluteDistFolderPath, {
+        ...options,
+        checkExisting: true,
+      });
+
+      // Verify both check and publish were attempted
+      expect(spawn.spawnAsync).toHaveBeenCalledWith('npm', [
+        'view',
+        `${mockPackageJson.name}@${mockPackageJson.version}`,
+        'version',
+      ]);
+      expect(spawn.spawnAsync).toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['publish'])
+      );
+    });
+
+    it('should skip version check when checkExisting is false', async () => {
+      const { absoluteDistFolderPath, options } = setup({
+        options: {
+          ...defaultOption,
+          checkExisting: false,
+        },
+      });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      // Verify npm view was not called
+      expect(spawn.spawnAsync).not.toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['view'])
+      );
+
+      // Verify publish was called
+      expect(spawn.spawnAsync).toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['publish'])
+      );
+    });
+
+    it('should respect custom registry when checking package existence', async () => {
+      const customRegistry = 'https://custom-registry.com';
+      const { absoluteDistFolderPath, options } = setup({
+        options: {
+          ...defaultOption,
+          checkExisting: true,
+          registry: customRegistry,
+        },
+      });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(spawn.spawnAsync).toHaveBeenCalledWith('npm', [
+        'view',
+        `${mockPackageJson.name}@${mockPackageJson.version}`,
+        'version',
+        '--registry',
+        customRegistry,
+      ]);
     });
   });
 });

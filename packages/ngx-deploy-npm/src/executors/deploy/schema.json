@@ -36,6 +36,11 @@
       "type": "boolean",
       "description": "For testing: Run through without making any changes. Execute with --dry-run and nothing will happen.",
       "default": false
+    },
+    "checkExisting": {
+      "type": "boolean",
+      "description": "Check if the package version already exists before publishing",
+      "default": false
     }
   },
   "required": ["distFolderPath"]

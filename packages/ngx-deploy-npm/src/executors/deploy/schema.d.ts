@@ -27,4 +27,8 @@ export interface DeployExecutorOptions {
    * For testing: Run through without making any changes. Execute with --dry-run and nothing will happen.
    */
   dryRun?: boolean;
+  /**
+   * Check if the package version already exists before publishing
+   */
+  checkExisting?: boolean;
 }
