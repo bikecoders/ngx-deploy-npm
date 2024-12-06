@@ -1,7 +1,40 @@
 import { logger } from '@nx/devkit';
+import * as fileUtils from '../../../utils';
+import * as path from 'path';
 
 import { setPackageVersion, NpmPublishOptions, spawnAsync } from '../utils';
 import { DeployExecutorOptions } from '../schema';
+
+async function checkIfPackageExists(
+  packageName: string,
+  version: string,
+  npmOptions: NpmPublishOptions
+): Promise<boolean> {
+  try {
+    const args = ['view', `${packageName}@${version}`, 'version'];
+    if (npmOptions.registry) {
+      args.push('--registry', npmOptions.registry);
+    }
+    await spawnAsync('npm', args);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function getPackageInfo(
+  distFolderPath: string
+): Promise<{ name: string; version: string }> {
+  const packageContent = await fileUtils.readFileAsync(
+    path.join(distFolderPath, 'package.json'),
+    { encoding: 'utf8' }
+  );
+  const packageJson = JSON.parse(packageContent);
+  return {
+    name: packageJson.name,
+    version: packageJson.version,
+  };
+}
 
 export async function run(
   distFolderPath: string,
@@ -22,6 +55,32 @@ export async function run(
     }
 
     const npmOptions = extractOnlyNPMOptions(options);
+
+    // Only check for existing package if explicitly enabled
+    if (
+      options.checkExisting &&
+      ['error', 'warning'].includes(options.checkExisting)
+    ) {
+      const packageInfo = await getPackageInfo(distFolderPath);
+      const exists = await checkIfPackageExists(
+        packageInfo.name,
+        packageInfo.version,
+        npmOptions
+      );
+
+      if (exists) {
+        if (options.checkExisting === 'error') {
+          throw new Error(
+            `Package ${packageInfo.name}@${packageInfo.version} already exists in registry.`
+          );
+        } else {
+          logger.warn(
+            `Package ${packageInfo.name}@${packageInfo.version} already exists in registry. Skipping  publish.`
+          );
+          return;
+        }
+      }
+    }
 
     await spawnAsync('npm', [
       'publish',
