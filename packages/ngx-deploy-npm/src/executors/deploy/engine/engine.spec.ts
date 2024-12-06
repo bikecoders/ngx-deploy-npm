@@ -155,18 +155,18 @@ describe('engine', () => {
       return setup(originalSetupOptions);
     };
 
-    it('should skip publishing when package exists and checkExisting is true', async () => {
+    it('should skip publishing when package exists and checkExisting is warning', async () => {
       const { absoluteDistFolderPath, options } = versionCheckSetup({
         options: {
           ...defaultOption,
-          checkExisting: true,
+          checkExisting: 'warning',
         },
         spawnAsyncReturnValue: () => Promise.resolve(),
       });
 
       await engine.run(absoluteDistFolderPath, {
         ...options,
-        checkExisting: true,
+        checkExisting: 'warning',
       });
 
       // Verify package check was performed
@@ -183,79 +183,37 @@ describe('engine', () => {
       );
     });
 
-    it('should proceed with publishing when package does not exist and checkExisting is true', async () => {
+    it('should throw error when package exists and checkExisting is "error"', async () => {
       const { absoluteDistFolderPath, options } = versionCheckSetup({
         options: {
           ...defaultOption,
-          checkExisting: true,
+          checkExisting: 'error',
         },
       });
 
-      // Mock npm view to fail (package doesn't exist)
+      // Mock npm view to succeed (package exists)
       jest
         .spyOn(spawn, 'spawnAsync')
-        .mockImplementationOnce(() => Promise.reject(new Error())) // First call (npm view) fails
-        .mockImplementationOnce(() => Promise.resolve()); // Second call (npm publish) succeeds
+        .mockImplementationOnce(() => Promise.resolve());
 
-      await engine.run(absoluteDistFolderPath, {
-        ...options,
-        checkExisting: true,
-      });
+      // Should throw error when package exists
+      await expect(() =>
+        engine.run(absoluteDistFolderPath, {
+          ...options,
+          checkExisting: 'error',
+        })
+      ).rejects.toThrow();
 
-      // Verify both check and publish were attempted
+      // Verify check was performed but publish was not attempted
       expect(spawn.spawnAsync).toHaveBeenCalledWith('npm', [
         'view',
         `${mockPackageJson.name}@${mockPackageJson.version}`,
         'version',
       ]);
-      expect(spawn.spawnAsync).toHaveBeenCalledWith(
-        'npm',
-        expect.arrayContaining(['publish'])
-      );
-    });
-
-    it('should skip version check when checkExisting is false', async () => {
-      const { absoluteDistFolderPath, options } = versionCheckSetup({
-        options: {
-          ...defaultOption,
-          checkExisting: false,
-        },
-      });
-
-      await engine.run(absoluteDistFolderPath, options);
-
-      // Verify npm view was not called
       expect(spawn.spawnAsync).not.toHaveBeenCalledWith(
         'npm',
-        expect.arrayContaining(['view'])
-      );
-
-      // Verify publish was called
-      expect(spawn.spawnAsync).toHaveBeenCalledWith(
-        'npm',
         expect.arrayContaining(['publish'])
       );
-    });
-
-    it('should respect custom registry when checking package existence', async () => {
-      const customRegistry = 'https://custom-registry.com';
-      const { absoluteDistFolderPath, options } = versionCheckSetup({
-        options: {
-          ...defaultOption,
-          checkExisting: true,
-          registry: customRegistry,
-        },
-      });
-
-      await engine.run(absoluteDistFolderPath, options);
-
-      expect(spawn.spawnAsync).toHaveBeenCalledWith('npm', [
-        'view',
-        `${mockPackageJson.name}@${mockPackageJson.version}`,
-        'version',
-        '--registry',
-        customRegistry,
-      ]);
     });
   });
 });

@@ -38,9 +38,9 @@
       "default": false
     },
     "checkExisting": {
-      "type": "boolean",
-      "description": "Check if the package version already exists before publishing",
-      "default": false
+      "type": "string",
+      "description": "How to handle existing package versions: 'warning' to continue with a warning, 'error' to abort publishing",
+      "enum": ["warning", "error"]
     }
   },
   "required": ["distFolderPath"]

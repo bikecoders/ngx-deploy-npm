@@ -57,7 +57,10 @@ export async function run(
     const npmOptions = extractOnlyNPMOptions(options);
 
     // Only check for existing package if explicitly enabled
-    if (options.checkExisting) {
+    if (
+      options.checkExisting &&
+      ['error', 'warning'].includes(options.checkExisting)
+    ) {
       const packageInfo = await getPackageInfo(distFolderPath);
       const exists = await checkIfPackageExists(
         packageInfo.name,
@@ -66,10 +69,16 @@ export async function run(
       );
 
       if (exists) {
-        logger.warn(
-          `Package ${packageInfo.name}@${packageInfo.version} already exists in registry. Skipping publish.`
-        );
-        return;
+        if (options.checkExisting === 'error') {
+          throw new Error(
+            `Package ${packageInfo.name}@${packageInfo.version} already exists in registry.`
+          );
+        } else {
+          logger.warn(
+            `Package ${packageInfo.name}@${packageInfo.version} already exists in registry. Skipping  publish.`
+          );
+          return;
+        }
       }
     }
 

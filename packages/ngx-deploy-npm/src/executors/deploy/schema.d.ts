@@ -30,5 +30,5 @@ export interface DeployExecutorOptions {
   /**
    * Check if the package version already exists before publishing
    */
-  checkExisting?: boolean;
+  checkExisting?: 'error' | 'warning';
 }
