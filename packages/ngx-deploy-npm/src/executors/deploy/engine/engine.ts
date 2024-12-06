@@ -10,12 +10,11 @@ async function checkIfPackageExists(
   npmOptions: NpmPublishOptions
 ): Promise<boolean> {
   try {
-    await spawnAsync('npm', [
-      'view',
-      `${packageName}@${version}`,
-      'version',
-      ...getOptionsStringArr(npmOptions),
-    ]);
+    const args = ['view', `${packageName}@${version}`, 'version'];
+    if (npmOptions.registry) {
+      args.push('--registry', npmOptions.registry);
+    }
+    await spawnAsync('npm', args);
     return true;
   } catch {
     return false;
