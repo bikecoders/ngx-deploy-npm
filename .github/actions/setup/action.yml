@@ -4,13 +4,24 @@ inputs:
   node-version:
     description: 'The Node.js version to use. The default one is going to be the defined on the .nvmrc file.'
     required: false
+  git_bot_token:
+    description: Git Bot token used to push to protected branches because github token can't
+    required: false
+
 runs:
   using: composite
   steps:
     - name: Checkout all commits
       uses: actions/checkout@v4
       with:
+        token: ${{ inputs.git_bot_token || github.token }}
         fetch-depth: 0
+
+    - name: git config
+      shell: bash
+      run: |
+        git config user.name "ngx-deploy-npm Bot"
+        git config user.email "-"
 
     - name: Set Node.js version based on .nvmrc or Action Input
       shell: bash
