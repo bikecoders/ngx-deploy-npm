@@ -36,6 +36,11 @@
       "type": "boolean",
       "description": "For testing: Run through without making any changes. Execute with --dry-run and nothing will happen.",
       "default": false
+    },
+    "checkExisting": {
+      "type": "string",
+      "description": "How to handle existing package versions: 'warning' to continue with a warning, 'error' to abort publishing",
+      "enum": ["warning", "error"]
     }
   },
   "required": ["distFolderPath"]
