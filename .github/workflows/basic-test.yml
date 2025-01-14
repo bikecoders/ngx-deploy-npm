@@ -18,7 +18,7 @@ jobs:
       - name: Archive lint report results
         uses: actions/upload-artifact@v4
         with:
-          name: lint-report.info
+          name: lint-report
           path: reports
 
   build:
@@ -50,14 +50,15 @@ jobs:
       - run: npx nx test ngx-deploy-npm --configuration="ci"
 
       - name: Set Node.js version based on .nvmrc
+        id: nvmrc
         shell: bash
         run: |
           version=$(cat .nvmrc)
           echo "Setting default value for node-version parameter: $version"
-          echo "NODE_VERSION=$version" >> $GITHUB_ENV
-          echo "$NODE_VERSION"
+          echo "node_version=$version" >> $GITHUB_OUTPUT
+          echo "$version"
 
-      - if: ${{ matrix.os == 'ubuntu-latest' && matrix.node-version == env.NODE_VERSION }}
+      - if: ${{ matrix.os == 'ubuntu-latest' && matrix.node-version == steps.nvmrc.outputs.node_version }}
         name: Archive coverage report
         uses: actions/upload-artifact@v4
         with:
