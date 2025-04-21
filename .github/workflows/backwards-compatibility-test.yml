@@ -34,8 +34,6 @@ jobs:
             node-version: 20
           - nx-version: '16.10.0'
             node-version: 18
-          - nx-version: '16.10.0'
-            node-version: 16 # This node's version is deprecated
 
     name: Backwards Compatibility Test
     uses: ./.github/workflows/smoke-test-nx-workspace.yml
