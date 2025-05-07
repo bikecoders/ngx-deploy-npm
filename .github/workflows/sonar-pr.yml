@@ -35,8 +35,52 @@ jobs:
             JSON.stringify(${{ github.event.workflow_run }}, null, 2)
 
       # Download reports
-      - uses: ./.github/actions/download-coverage-report
-      - uses: ./.github/actions/download-lint-report
+      - name: 'Download reports'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            async function downloadArtifact(artifactName) {
+              console.log(`Looking for artifact: ${artifactName}`);
+              let allArtifacts = await github.rest.actions.listWorkflowRunArtifacts({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: context.payload.workflow_run.id,
+              });
+              console.log('Available artifacts:', allArtifacts.data.artifacts.map(a => a.name));
+
+              let matchArtifact = allArtifacts.data.artifacts.find((artifact) => {
+                return artifact.name === artifactName;
+              });
+
+              if (!matchArtifact) {
+                throw new Error(`Artifact "${artifactName}" not found!`);
+              }
+
+              let download = await github.rest.actions.downloadArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: matchArtifact.id,
+                archive_format: 'zip',
+              });
+
+              let fs = require('fs');
+              fs.writeFileSync(`${process.env.GITHUB_WORKSPACE}/${artifactName}.zip`, Buffer.from(download.data));
+              return artifactName;
+            }
+
+            // Download both artifacts
+            await Promise.all([
+              downloadArtifact('ngx-deploy-npm-coverage-report'),
+              downloadArtifact('lint-report')
+            ]);
+      - name: 'Extract reports'
+        run: |
+          # Extract coverage report
+          mkdir -p coverage/packages/ngx-deploy-npm
+          unzip ngx-deploy-npm-coverage-report.zip -d coverage/packages/ngx-deploy-npm
+          # Extract lint report
+          mkdir -p reports
+          unzip lint-report.zip -d reports
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v4.2.1
