@@ -1,4 +1,5 @@
 name: Backwards Compatibility Test
+description: 'Test backwards compatibility with different Nx versions and Node versions. For more information about Nx and Node versions, see https://nx.dev/reference/core-api/workspace/documents/nx-nodejs-typescript-version-matrix'
 
 on: workflow_call
 
@@ -8,16 +9,23 @@ jobs:
       matrix:
         include:
           # '' means current workspace version
-          - nx-version: ''
+          - nx-version: '' # 21.x
             node-version: 22
           - nx-version: ''
             node-version: 20
 
-          - nx-version: 'previous'
+          - nx-version: 'previous' # 20.x
             node-version: 22
           - nx-version: 'previous'
             node-version: 20
           - nx-version: 'previous'
+            node-version: 18
+
+          - nx-version: '19.8.14'
+            node-version: 22
+          - nx-version: '19.8.14'
+            node-version: 20
+          - nx-version: '19.8.14'
             node-version: 18
 
           - nx-version: '18.3.5'
@@ -34,8 +42,6 @@ jobs:
             node-version: 20
           - nx-version: '16.10.0'
             node-version: 18
-          - nx-version: '16.10.0'
-            node-version: 16 # This node's version is deprecated
 
     name: Backwards Compatibility Test
     uses: ./.github/workflows/smoke-test-nx-workspace.yml
