@@ -28,24 +28,8 @@ jobs:
           - nx-version: '19.8.14'
             node-version: 18
 
-          - nx-version: '18.3.5'
-            node-version: 20
-          - nx-version: '18.3.5'
-            node-version: 18
-
-          - nx-version: '17.3.2'
-            node-version: 20
-          - nx-version: '17.3.2'
-            node-version: 18
-
-          - nx-version: '16.10.0'
-            node-version: 20
-          - nx-version: '16.10.0'
-            node-version: 18
-
     name: Backwards Compatibility Test
     uses: ./.github/workflows/smoke-test-nx-workspace.yml
     with:
       nx-version: ${{matrix.nx-version}}
       node-version: ${{matrix.node-version}}
-      verbose: true

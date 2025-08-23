@@ -26,22 +26,23 @@ const executeCommandFactory =
 
     try {
       output = execSync(command, {
-        stdio: 'inherit',
+        stdio: ['ignore', 'pipe', 'pipe'], // capture stdout and stderr
         cwd: projectDirectory,
         encoding: 'utf-8',
         env: process.env,
       });
-    } catch (error) {
-      console.error(`Error executing command: ${command}`);
-      if (error instanceof Error) {
-        if ('stderr' in error && error.stderr) {
-          console.error(`stderr: ${error.stderr}`);
-        }
-        if (error.message) {
-          console.error(`message: ${error.message}`);
-        }
-      } else {
-        console.error(`Unknown error: ${error}`);
+    } catch (error: any) {
+      logger.error(`Error executing command: ${command}`);
+      if (error.stdout) {
+        logger.error(`stdout: ${error.stdout}`);
+        process.stdout.write(error.stdout);
+      }
+      if (error.stderr) {
+        logger.error(`stderr: ${error.stderr}`);
+        process.stderr.write(error.stderr);
+      }
+      if (error.message) {
+        logger.error(`message: ${error.message}`);
       }
       throw error;
     }
@@ -60,6 +61,8 @@ export const setup = async (
     skipInstall?: boolean;
     extraOptions?: string;
     distFolderPath?: string;
+    noInteractive?: boolean;
+    useProjectJson?: boolean;
   }[]
 ) => {
   const projectDirectory = await createTestProject();
@@ -79,32 +82,44 @@ export const setup = async (
 
   // Init libs
   await Promise.all(
-    libs.map(async ({ name, generator, extraOptions = '' }) => {
-      if (generator === 'minimal') {
-        await createMinimalLib(projectDirectory, name);
-      } else {
-        generateLib({
-          nxPlugin: generator,
-          executeCommand,
-          libName: name,
-          extraOptions: `--directory="${buildPackageProjectRoot(
-            name
-          )}" ${extraOptions}`,
-        });
+    libs.map(
+      async ({
+        name,
+        generator,
+        extraOptions = '',
+        noInteractive = true,
+        useProjectJson = false,
+      }) => {
+        if (generator === 'minimal') {
+          await createMinimalLib(projectDirectory, name, useProjectJson);
+        } else {
+          const extraOptionsNormalized = [
+            `--directory="${buildPackageProjectRoot(name)}"`,
+            noInteractive ? '--no-interactive' : '',
+            useProjectJson ? '--use-project-json' : '',
+            extraOptions,
+          ]
+            .filter(Boolean)
+            .join(' ');
+
+          generateLib({
+            nxPlugin: generator,
+            executeCommand,
+            libName: name,
+            extraOptions: extraOptionsNormalized,
+          });
+        }
       }
-    })
+    )
   );
 
   // Install ngx-deploy-npm
   libs
     .filter(({ skipInstall }) => !!skipInstall === false)
-    .forEach(({ name, installOptions, generator }) => {
+    .forEach(({ name, installOptions }) => {
       installNgxDeployNPMProject(executeCommand, {
         project: name,
-        distFolderPath:
-          generator === 'minimal'
-            ? buildPackageProjectRoot(name)
-            : `dist/${buildPackageProjectRoot(name)}`,
+        distFolderPath: buildPackageProjectRoot(name),
         access: installOptions?.access || 'public',
         ...installOptions,
       });
@@ -114,25 +129,63 @@ export const setup = async (
     name: string;
     workspace: ProjectConfiguration;
     npmPackageName: string;
-  }[] = libs.map(({ name }) => ({
-    name: name,
-    workspace: readJson(
-      `${projectDirectory}/${buildPackageProjectRoot(name)}/project.json`
-    ),
-    npmPackageName: readJson(
-      `${projectDirectory}/${buildPackageProjectRoot(name)}/package.json`
-    ).name,
-  }));
+  }[] = libs.map(({ name, useProjectJson = false }) => {
+    const projectPath = `${projectDirectory}/${buildPackageProjectRoot(name)}`;
+    const packageJson = readJson(`${projectPath}/package.json`);
+
+    // Use useProjectJson parameter to determine where to read configuration from
+    let workspace: ProjectConfiguration | null = null;
+    if (useProjectJson) {
+      // Read from project.json file
+      workspace = readJson(
+        `${projectPath}/project.json`
+      ) as ProjectConfiguration;
+    } else {
+      // Read project configuration from package.json (nx field or infer from structure)
+      const packageJson = readJson(`${projectPath}/package.json`);
+
+      workspace = {
+        name: name,
+        root: buildPackageProjectRoot(name),
+      };
+
+      // Check if package.json has nx field with project configuration
+      if (packageJson.nx) {
+        workspace = {
+          ...workspace,
+          ...packageJson.nx,
+          tags: packageJson.nx.tags || [],
+          targets: packageJson.nx.targets || {},
+        };
+      }
+    }
+
+    if (!workspace || Object.keys(workspace).length === 0) {
+      throw new Error(
+        `Workspace configuration for project "${name}" is empty or undefined.`
+      );
+    }
+
+    return {
+      name: name,
+      workspace,
+      npmPackageName: packageJson.name,
+    };
+  });
 
   return {
     processedLibs,
     projectDirectory,
     tearDown: async () => {
       if (process.env.NGX_DEPLOY_NPM_E2E__NO_TEAR_DOWN !== 'true') {
+        logger.verbose('Tearing down');
+
         await fs.promises.rm(projectDirectory, {
           recursive: true,
           force: true,
         });
+      } else {
+        logger.verbose('Skipping teardown');
       }
 
       return Promise.resolve();
@@ -141,7 +194,11 @@ export const setup = async (
   };
 };
 
-async function createMinimalLib(projectDirectory: string, libName: string) {
+async function createMinimalLib(
+  projectDirectory: string,
+  libName: string,
+  useProjectJson: boolean
+) {
   // Create Lib
   const libRootAbsolutePath = join(
     projectDirectory,
@@ -154,14 +211,9 @@ async function createMinimalLib(projectDirectory: string, libName: string) {
     recursive: true,
   });
 
-  const createProjectJsonPromise = fs.promises.writeFile(
-    join(libRootAbsolutePath, 'project.json'),
-    generateProjectJSON(libName, libRoot),
-    'utf8'
-  );
   const createPackageJsonPromise = fs.promises.writeFile(
     join(libRootAbsolutePath, 'package.json'),
-    generatePackageJSON(libName),
+    generatePackageJSON(libName, useProjectJson),
     'utf8'
   );
   const createUniqueFilePromise = fs.promises.writeFile(
@@ -169,11 +221,20 @@ async function createMinimalLib(projectDirectory: string, libName: string) {
     "console.log('Hello World!');",
     'utf8'
   );
-  await Promise.all([
-    createProjectJsonPromise,
-    createPackageJsonPromise,
-    createUniqueFilePromise,
-  ]);
+
+  const promises = [createPackageJsonPromise, createUniqueFilePromise];
+
+  // Only create project.json if useProjectJson is true
+  if (useProjectJson) {
+    const createProjectJsonPromise = fs.promises.writeFile(
+      join(libRootAbsolutePath, 'project.json'),
+      generateProjectJSON(libName, libRoot),
+      'utf8'
+    );
+    promises.push(createProjectJsonPromise);
+  }
+
+  await Promise.all(promises);
 
   return { libRoot };
 
@@ -188,12 +249,22 @@ async function createMinimalLib(projectDirectory: string, libName: string) {
     return JSON.stringify(content, null, 2);
   }
 
-  function generatePackageJSON(projectName: string): string {
-    const content = {
+  function generatePackageJSON(
+    projectName: string,
+    useProjectJson: boolean
+  ): string {
+    const content: any = {
       name: `@mock-domain/${projectName}`,
       description: 'Minimal LIb',
       version: '1.0.0',
     };
+
+    // Add nx configuration with targets when not using project.json
+    if (!useProjectJson) {
+      content.nx = {
+        name: projectName,
+      };
+    }
 
     return JSON.stringify(content, null, 2);
   }

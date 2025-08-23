@@ -12,5 +12,7 @@ const logger: Record<keyof typeof originalLogger, jest.Mock> = {
 
 module.exports = {
   ...jest.requireActual('@nx/devkit'),
+  readJson: jest.fn(),
+  createProjectGraphAsync: jest.fn(),
   logger,
 };
