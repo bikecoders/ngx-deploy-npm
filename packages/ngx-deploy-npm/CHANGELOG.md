@@ -2,6 +2,20 @@
 
 This file was generated using [@jscutlery/semver](https://github.com/jscutlery/semver).
 
+# [9.0.0](https://github.com/bikecoders/ngx-deploy-npm/compare/ngx-deploy-npm-8.4.0...ngx-deploy-npm-9.0.0) (2025-08-24)
+
+### Bug Fixes
+
+- adapt install generator to libraries without project.json ([#714](https://github.com/bikecoders/ngx-deploy-npm/issues/714)) ([647d6c9](https://github.com/bikecoders/ngx-deploy-npm/commit/647d6c96a814c32d239a084ef02cd1778e4365de))
+
+### Features
+
+- add support to nx v21 ([#701](https://github.com/bikecoders/ngx-deploy-npm/issues/701)) ([bc68b7e](https://github.com/bikecoders/ngx-deploy-npm/commit/bc68b7e3f049a44d6a0afd2ff3c4e7ad15e9f31b))
+
+### BREAKING CHANGES
+
+- drop support for Nx 16, 17 and 18
+
 # [8.4.0](https://github.com/bikecoders/ngx-deploy-npm/compare/ngx-deploy-npm-8.3.1...ngx-deploy-npm-8.4.0) (2024-12-17)
 
 ### Features
