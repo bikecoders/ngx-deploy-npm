@@ -1,3 +1,5 @@
+import { logger } from '@nx/devkit';
+
 type Options = {
   nxPlugin: string;
   libName: string;
@@ -18,6 +20,9 @@ export function generateLib({
   const publishableOption = setPublishableOption ? '--publishable' : '';
   const extraOptionsNormalized = extraOptions ? extraOptions : '';
 
+  logger.verbose(
+    `Generating lib ${libName} with nxPlugin ${nxPlugin} and generator ${generator} and extraOptions ${extraOptionsNormalized}`
+  );
   executeCommand(
     `npx nx generate ${nxPlugin}:${generator} --name ${libName} ${publishableOption} --importPath ${libName} ${extraOptionsNormalized}`
   );

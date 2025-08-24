@@ -19,9 +19,9 @@
       "executor": "@nx/jest:jest",
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
       "options": {
-        "testPathPattern": [".*smoke.*\\.spec\\.ts$"],
         "jestConfig": "packages/ngx-deploy-npm-e2e/jest.config.ts",
-        "runInBand": true
+        "runInBand": true,
+        "testPathPatterns": [".*smoke.*\\.spec\\.ts$"]
       }
     },
     "lint": {

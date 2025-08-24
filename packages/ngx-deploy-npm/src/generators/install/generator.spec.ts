@@ -4,6 +4,8 @@ import {
   ProjectConfiguration,
   getProjects,
   TargetConfiguration,
+  createProjectGraphAsync,
+  ProjectGraph,
 } from '@nx/devkit';
 
 import generator from './generator';
@@ -66,13 +68,41 @@ describe('install generator', () => {
 
     jest
       .spyOn(utils, 'isProjectAPublishableLib')
-      .mockImplementation(project => {
+      .mockImplementation((_, project) => {
         const isAPublishableLib = project.name
           ? !!workspacePublishableLibs[project.name]
           : false;
 
         return Promise.resolve(isAPublishableLib);
       });
+
+    // Configure createProjectGraphAsync mock to return project graph with targets
+    (
+      createProjectGraphAsync as jest.MockedFunction<
+        typeof createProjectGraphAsync
+      >
+    ).mockImplementation(async () => {
+      const nodes = Object.entries(workspaceProjects).reduce(
+        (acc, [projectName, projectConfig]) => {
+          acc[projectName] = {
+            name: projectName,
+            type: 'lib',
+            data: {
+              root: projectConfig.root,
+              sourceRoot: projectConfig.sourceRoot,
+              targets: projectConfig.targets || {},
+            },
+          };
+          return acc;
+        },
+        {} as ProjectGraph['nodes']
+      );
+
+      return {
+        nodes,
+        dependencies: {},
+      };
+    });
 
     // Create workspace
     Array.from(workspaceConfig.entries()).forEach(([key, projectConfig]) =>
@@ -106,6 +136,7 @@ describe('install generator', () => {
   };
 
   afterEach(jest.restoreAllMocks);
+
   it('should create the target with the right structure for a buildable lib', async () => {
     const projectName = 'buildableLib';
     const { appTree } = setup({
@@ -174,28 +205,34 @@ describe('install generator', () => {
     expect(targetDeploy).toStrictEqual(undefined);
   });
 
-  it('should create the target with the right structure for a lib without targets', async () => {
-    const projectName = 'targetLess';
-    const { appTree } = setup({
-      workspaceProjects: {
-        [projectName]: mocks.getTargetlessLib(projectName),
-      },
-      workspacePublishableLibs: { [projectName]: true },
-    });
+  test.each([
+    ['target less lib', (name: string) => mocks.getTargetlessLib(name)],
+    ['emtpy target lib', (name: string) => mocks.getEmptyTargetLib(name)],
+  ])(
+    'should create the target with the right structure for a lib without targets: %s',
+    async (_desc, getLibFn) => {
+      const projectName = 'targetLess';
+      const { appTree } = setup({
+        workspaceProjects: {
+          [projectName]: getLibFn(projectName),
+        },
+        workspacePublishableLibs: { [projectName]: true },
+      });
 
-    await generator(appTree, {
-      project: projectName,
-      distFolderPath: buildMockDistPath(projectName),
-      access: npmAccess.public,
-    });
+      await generator(appTree, {
+        project: projectName,
+        distFolderPath: buildMockDistPath(projectName),
+        access: npmAccess.public,
+      });
 
-    const allProjects = getProjects(appTree);
-    const project = allProjects.get(projectName);
-    const setOptions: InstallGeneratorOptions =
-      project?.targets?.deploy.options;
+      const allProjects = getProjects(appTree);
+      const project = allProjects.get(projectName);
+      const setOptions: InstallGeneratorOptions =
+        project?.targets?.deploy.options;
 
-    expect(setOptions.access).toEqual(npmAccess.public);
-  });
+      expect(setOptions.access).toEqual(npmAccess.public);
+    }
+  );
 
   describe('--access', () => {
     const setupAccess = (access: npmAccess) => {
@@ -277,6 +314,26 @@ describe('install generator', () => {
         new Error(
           `The project ${invalidProjects} doesn't exist on your workspace`
         )
+      );
+    });
+
+    it('should handle project not found in project graph', async () => {
+      const projectName = 'nonExistentProject';
+      const { appTree } = setup({
+        workspaceProjects: {
+          // Only include other projects, not the one we're testing
+          lib1: mocks.getLib('lib1'),
+        },
+      });
+
+      await expect(
+        generator(appTree, {
+          project: projectName,
+          distFolderPath: buildMockDistPath(projectName),
+          access: npmAccess.public,
+        })
+      ).rejects.toThrow(
+        new Error(`The project ${projectName} doesn't exist on your workspace`)
       );
     });
   });

@@ -1,6 +1,6 @@
 import { isProjectAPublishableLib } from './is-a-lib';
 import * as fileUtils from './file-utils';
-import { ProjectConfiguration } from '@nx/devkit';
+import { ProjectConfiguration, Tree, readJson } from '@nx/devkit';
 import * as mocks from '../__mocks__/mocks';
 import * as path from 'path';
 
@@ -21,65 +21,120 @@ describe('is-a-lib', () => {
   describe('isProjectAPublishableLib', () => {
     const setUpIsProjectAPublishableLib = ({
       shouldPackageJsonExists,
+      packageJsonContent,
     }: {
       shouldPackageJsonExists: boolean;
+      packageJsonContent?: { name: string; private?: boolean };
     }) => {
       const { projects } = setUp();
+      const mockTree = {} as Tree;
 
       const fileExistsMock = jest
         .spyOn(fileUtils, 'fileExists')
         .mockImplementation(() => Promise.resolve(shouldPackageJsonExists));
 
-      return { fileExistsMock, projects };
+      const readJsonMock = jest
+        .spyOn({ readJson }, 'readJson')
+        .mockImplementation(() => packageJsonContent || { name: 'test-lib' });
+
+      return { fileExistsMock, readJsonMock, projects, mockTree };
     };
 
     afterEach(jest.restoreAllMocks);
 
-    it('should indicate that the project is a publishable library', async () => {
-      const { projects } = setUpIsProjectAPublishableLib({
-        shouldPackageJsonExists: true,
+    describe('when package.json exists', () => {
+      describe('and package is public (private is false or undefined)', () => {
+        it('should indicate that the project is a publishable library when private is false', async () => {
+          const { projects, mockTree } = setUpIsProjectAPublishableLib({
+            shouldPackageJsonExists: true,
+            packageJsonContent: { name: 'test-lib', private: false },
+          });
+
+          const response = await isProjectAPublishableLib(
+            mockTree,
+            projects.publishableLibrary
+          );
+
+          expect(response).toBe(true);
+        });
+
+        it('should indicate that the project is a publishable library when private is undefined', async () => {
+          const { projects, mockTree } = setUpIsProjectAPublishableLib({
+            shouldPackageJsonExists: true,
+            packageJsonContent: { name: 'test-lib' },
+          });
+
+          const response = await isProjectAPublishableLib(
+            mockTree,
+            projects.publishableLibrary
+          );
+
+          expect(response).toBe(true);
+        });
       });
 
-      const response = await isProjectAPublishableLib(
-        projects.publishableLibrary
-      );
+      describe('and package is private (private is true)', () => {
+        it('should indicate that the project is not a publishable library', async () => {
+          const { projects, mockTree } = setUpIsProjectAPublishableLib({
+            shouldPackageJsonExists: true,
+            packageJsonContent: { name: 'test-lib', private: true },
+          });
 
-      expect(response).toBe(true);
+          const response = await isProjectAPublishableLib(
+            mockTree,
+            projects.publishableLibrary
+          );
+
+          expect(response).toBe(false);
+        });
+      });
     });
 
-    it('should indicate that the project is a non publishable library (app)', async () => {
-      const { projects } = setUpIsProjectAPublishableLib({
-        shouldPackageJsonExists: true,
+    describe('when package.json does not exist', () => {
+      it('should indicate that the project is not a publishable library', async () => {
+        const { projects, mockTree } = setUpIsProjectAPublishableLib({
+          shouldPackageJsonExists: false,
+        });
+
+        const response = await isProjectAPublishableLib(
+          mockTree,
+          projects.nonPublishableLibrary
+        );
+
+        expect(response).toBe(false);
       });
-
-      const response = await isProjectAPublishableLib(projects.app);
-
-      expect(response).toBe(false);
     });
 
-    it('should indicate that the project is a non publishable library (non publishable library)', async () => {
-      const { projects } = setUpIsProjectAPublishableLib({
-        shouldPackageJsonExists: false,
+    describe('file operations', () => {
+      it('should look for package.json file in the project root', async () => {
+        const { fileExistsMock, projects, mockTree } =
+          setUpIsProjectAPublishableLib({
+            shouldPackageJsonExists: false,
+          });
+        const project = projects.nonPublishableLibrary;
+
+        await isProjectAPublishableLib(mockTree, project);
+
+        expect(fileExistsMock).toHaveBeenCalledWith(
+          path.join(project.root, 'package.json')
+        );
       });
 
-      const response = await isProjectAPublishableLib(
-        projects.nonPublishableLibrary
-      );
+      it('should read package.json content when file exists', async () => {
+        const { readJsonMock, projects, mockTree } =
+          setUpIsProjectAPublishableLib({
+            shouldPackageJsonExists: true,
+            packageJsonContent: { name: 'test-lib', private: false },
+          });
+        const project = projects.publishableLibrary;
 
-      expect(response).toBe(false);
-    });
+        await isProjectAPublishableLib(mockTree, project);
 
-    it('should look for package.json file', async () => {
-      const { fileExistsMock, projects } = setUpIsProjectAPublishableLib({
-        shouldPackageJsonExists: false,
+        expect(readJsonMock).toHaveBeenCalledWith(
+          mockTree,
+          path.join(project.root, 'package.json')
+        );
       });
-      const project = projects.nonPublishableLibrary;
-
-      await isProjectAPublishableLib(project);
-
-      expect(fileExistsMock.mock.calls[0][0]).toEqual(
-        path.join(project.root, 'package.json')
-      );
     });
   });
 });

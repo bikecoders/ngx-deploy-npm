@@ -1,5 +1,6 @@
 import { InstallGeneratorOptions } from 'bikecoders/ngx-deploy-npm';
 import { getNxWorkspaceVersion } from './get-nx-workspace-version';
+import { logger } from '@nx/devkit';
 
 export function initNgxDeployNPMProject(
   executeCommand: (command: string) => void
@@ -23,5 +24,6 @@ export function installNgxDeployNPMProject(
     )
     .join(' ');
 
+  logger.verbose(`Installing ngx-deploy-npm with options: ${optionsParsed}`);
   executeCommand(`npx nx generate ngx-deploy-npm:install ${optionsParsed}`);
 }

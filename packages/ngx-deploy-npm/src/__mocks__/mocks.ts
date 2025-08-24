@@ -31,6 +31,17 @@ export const getTargetlessLib = (libName: string): ProjectConfiguration => {
   };
 };
 
+export const getEmptyTargetLib = (libName: string): ProjectConfiguration => {
+  return {
+    root: `libs/${libName}`,
+    name: libName,
+    sourceRoot: `libs/${libName}/src`,
+    projectType: 'library',
+    tags: [],
+    targets: {},
+  };
+};
+
 // ? should we remove this since we are no longer building the library?
 export const getLibWithoutBuildTarget = (
   libName: string

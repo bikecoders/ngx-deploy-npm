@@ -20,7 +20,7 @@ describe('install', () => {
     const target: TargetConfiguration<DeployExecutorOptions> = {
       executor: 'ngx-deploy-npm:deploy',
       options: {
-        distFolderPath: customDistFolderPath || `dist/packages/${projectName}`,
+        distFolderPath: customDistFolderPath || `packages/${projectName}`,
         access,
       },
     };
@@ -34,8 +34,14 @@ describe('install', () => {
 
   it('should modify the workspace only for the indicated libs', async () => {
     const { processedLibs, tearDown } = await setup([
-      { name: uniq('node-lib1'), generator: '@nx/node' },
-      { name: uniq('node-lib2'), generator: '@nx/node' },
+      {
+        name: uniq('node-lib1'),
+        generator: '@nx/node',
+      },
+      {
+        name: uniq('node-lib2'),
+        generator: '@nx/node',
+      },
       {
         name: uniq('node-resctricted'),
         installOptions: {
@@ -48,10 +54,24 @@ describe('install', () => {
         skipInstall: true,
         generator: '@nx/node',
       },
-      { name: uniq('small-lib'), generator: 'minimal' },
+      {
+        name: uniq('small-lib-with-project-json'),
+        generator: 'minimal',
+        useProjectJson: true,
+      },
+      {
+        name: uniq('small-lib'),
+        generator: 'minimal',
+      },
     ]);
-    const [publicLib, publicLib2, restrictedLib, libNOTSet, smallLib] =
-      processedLibs;
+    const [
+      publicLib,
+      publicLib2,
+      restrictedLib,
+      libNOTSet,
+      smallLibWithProjectJson,
+      smallLib,
+    ] = processedLibs;
 
     expect(publicLib.workspace.targets?.deploy).toEqual(
       expectedTarget({ projectName: publicLib.name })
@@ -66,6 +86,14 @@ describe('install', () => {
       })
     );
     expect(libNOTSet.workspace.targets?.deploy).toEqual(undefined);
+
+    expect(smallLibWithProjectJson.workspace.targets?.deploy).toEqual(
+      expectedTarget({
+        projectName: smallLibWithProjectJson.name,
+        customDistFolderPath: smallLibWithProjectJson.workspace.sourceRoot,
+        isBuildable: false,
+      })
+    );
 
     expect(smallLib.workspace.targets?.deploy).toEqual(
       expectedTarget({

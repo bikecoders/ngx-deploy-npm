@@ -1,6 +1,6 @@
 import { setup } from './utils';
 
-describe('ngx-deploy-npm', () => {
+describe('package installation', () => {
   it('should be installed', async () => {
     const { tearDown, executeCommand } = await setup([]);
 

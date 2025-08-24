@@ -241,7 +241,7 @@ For testing: Run through without making any changes. Execute with `--dry-run`, a
 
 | Version | Nx Workspace Version |
 | ------- | -------------------- |
-| v8.5.0  | `>=16.x  <21.x`      |
+| v9.0.0  | `>=19.x  <21.x`      |
 | v8.4.0  | `>=16.x  <20.x`      |
 | v8.2.0  | `>=16.x  <19.x`      |
 | v8.1.0  | `>=16.x  <18.x`      |

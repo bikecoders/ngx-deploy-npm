@@ -2,21 +2,38 @@ import { uniq } from '@nx/plugin/testing';
 import { setup } from './utils';
 
 describe('Publish', () => {
-  test.each([
+  test.each<{
+    testName: string;
+    setupParams: Parameters<typeof setup>[0][number];
+  }>([
     {
-      name: uniq('angular-lib'),
-      generator: '@nx/angular',
-      extraOptions: '--style css',
+      testName: 'angular lib with default config',
+      setupParams: {
+        name: uniq('angular-lib'),
+        generator: '@nx/angular',
+        extraOptions: '--style css',
+      },
     },
     {
-      name: uniq('node-lib'),
-      generator: '@nx/node',
+      testName: 'node lib with config on package.json',
+      setupParams: {
+        name: uniq('node-lib-with-package-json'),
+        generator: '@nx/node',
+      },
+    },
+    {
+      testName: 'node lib with config on project.json',
+      setupParams: {
+        name: uniq('node-lib-project-json'),
+        generator: '@nx/node',
+        useProjectJson: true,
+      },
     },
   ])(
-    'should publish with $generator lib',
-    async libConfig => {
+    'should publish with $testName lib',
+    async ({ setupParams }) => {
       const { executeCommand, tearDown, processedLibs } = await setup([
-        libConfig,
+        setupParams,
       ]);
       const [lib] = processedLibs;
 
