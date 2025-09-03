@@ -8,7 +8,7 @@ jobs:
   lint-next:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/migrate
         with:
@@ -19,7 +19,7 @@ jobs:
   build-next:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/migrate
         with:
@@ -30,7 +30,7 @@ jobs:
   test-next:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/migrate
         with:
@@ -41,7 +41,7 @@ jobs:
   e2e-next:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/migrate
         with:
