@@ -1,6 +1,9 @@
-export default {
+const isWindows = process.platform === 'win32';
+
+module.exports = {
   displayName: 'ngx-deploy-npm-e2e',
   preset: '../../jest.preset.js',
+  testTimeout: isWindows ? 480_000 : 240_000,
   transform: {
     '^.+\\.[tj]s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],
   },
