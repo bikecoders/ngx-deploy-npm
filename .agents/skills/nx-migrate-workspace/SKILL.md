@@ -2,8 +2,8 @@
 name: nx-migrate-workspace
 description: >-
   Upgrade this Nx workspace one major per run with nx migrate, then update
-  backwards-compat CI, basic-test/e2e Node matrices, and .nvmrc from the workspace
-  version after migrations finish.
+  backwards-compat CI, basic-test/e2e Node matrices, .nvmrc, and @types/node from the
+  workspace version after migrations finish.
   Never jump multiple nx migrate majors in one run. Use when updating
   or migrating Nx.
 ---
@@ -15,7 +15,7 @@ The user reviews all changes — **never commit, push, or open a PR** unless ask
 ## Hard rules
 
 1. **`nx migrate` one major per run** — e.g. on 21.x use `nx migrate 22` only; stop and summarize; repeat later for 23.
-2. **Compatibility CI last** — update [backwards-compatibility-test.yml](.github/workflows/backwards-compatibility-test.yml), [basic-test.yml](.github/workflows/basic-test.yml) (unit-test matrix), [e2e-test.yml](.github/workflows/e2e-test.yml), and [.nvmrc](.nvmrc) only **after** `nx migrate --run-migrations`, using the version now in `package.json`.
+2. **Compatibility CI last** — update [backwards-compatibility-test.yml](.github/workflows/backwards-compatibility-test.yml), [basic-test.yml](.github/workflows/basic-test.yml) (unit-test matrix), [e2e-test.yml](.github/workflows/e2e-test.yml), [.nvmrc](.nvmrc), and root `package.json` `devDependencies["@types/node"]` only **after** `nx migrate --run-migrations`, using the version now in `package.json`.
 3. **Do not skip ahead in CI** — matrix rows must not target Nx majors above what `package.json` has after this run.
 4. **`npm exec nx …`** — this repo uses npm.
 5. **No git commits.**
@@ -36,7 +36,7 @@ One major per run:
 - [ ] 3. npm install
 - [ ] 4. Migrate coupled plugins + npm install
 - [ ] 5. nx migrate --run-migrations
-- [ ] 6. Node compatibility (.nvmrc + backwards-compat + basic-test + e2e-test) — after step 5; see reference
+- [ ] 6. Node compatibility (.nvmrc + @types/node + backwards-compat + basic-test + e2e-test) — after step 5; see reference
 - [ ] 7. nx build / test / lint ngx-deploy-npm
 - [ ] 8. Summarize for review (no commit)
 ```
@@ -94,6 +94,8 @@ Do **not** replace `'previous'` with a numeric version. **Keep the `previous` ta
 
 Also update [basic-test.yml](.github/workflows/basic-test.yml) (`unit-test` job) and [e2e-test.yml](.github/workflows/e2e-test.yml): set `node-version` to **every** Node major Nx documents for the **workspace** major (same list as the `''` tier in backwards-compat), e.g. Nx 22.x → `[20, 22, 24, 26]`. Update workflow comments when the workspace major changes.
 
+Set root `devDependencies["@types/node"]` to the **same major as `.nvmrc`** (e.g. `.nvmrc` `24` → `^24.x` with a current patch from `npm view @types/node@24 version`). `nx migrate` often leaves stale `@types/node` (e.g. `^20.x`); fix it in this step, not only when `.nvmrc` changes.
+
 ### 7 — Validate
 
 ```bash
@@ -106,7 +108,7 @@ Optional: `npm exec nx smoke ngx-deploy-npm-e2e`
 
 ### 8 — Handoff
 
-Include: Nx old → new; files changed; `.nvmrc` rationale; matrix tier counts; peer warnings; remaining majors; suggested commit message (text only).
+Include: Nx old → new; files changed; `.nvmrc` and `@types/node` rationale; matrix tier counts; peer warnings; remaining majors; suggested commit message (text only).
 
 ## Optional follow-ups
 

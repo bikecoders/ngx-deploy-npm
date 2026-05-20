@@ -25,7 +25,7 @@
     "@nx/plugin": "22.7.2",
     "@nx/workspace": "22.7.2",
     "@types/jest": "30.0.0",
-    "@types/node": "^20.14.8",
+    "@types/node": "^24.12.4",
     "commitizen": "4.3.1",
     "create-nx-workspace": "22.7.2",
     "cz-conventional-changelog": "3.3.0",
