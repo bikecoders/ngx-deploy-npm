@@ -5,6 +5,7 @@
 **Why last:** `package.json` already has the new Nx version. Update from **that current state**:
 
 - [.nvmrc](../../../.nvmrc)
+- Root [package.json](../../../package.json) `devDependencies["@types/node"]` (major must match `.nvmrc`)
 - [.github/workflows/backwards-compatibility-test.yml](../../../.github/workflows/backwards-compatibility-test.yml)
 - [.github/workflows/basic-test.yml](../../../.github/workflows/basic-test.yml) (`unit-test` matrix)
 - [.github/workflows/e2e-test.yml](../../../.github/workflows/e2e-test.yml)
@@ -114,6 +115,17 @@ Retain Node rows or infer from the closest documented major.
 
 Nx docs row for **workspace major** (from `package.json`) ∩ **Node LTS** from [Node.js Releases](https://nodejs.org/en/about/previous-releases). One integer line (`24`).
 
+## `@types/node` (root `package.json`)
+
+Match the **major** in `.nvmrc` — not whatever `nx migrate` last wrote (often an older major).
+
+```bash
+# .nvmrc is 24 → align typings
+npm view @types/node@24 version
+```
+
+Set `devDependencies["@types/node"]` to `^<major>.<latest-patch>` (e.g. `^24.12.4` when `.nvmrc` is `24`). Run `npm install` if you change it outside the main migrate install step.
+
 ## Checklist
 
 - [ ] Migrations finished; `package.json` nx version is the new major for this run
@@ -123,5 +135,6 @@ Nx docs row for **workspace major** (from `package.json`) ∩ **Node LTS** from 
 - [ ] Minimum pin: latest patch on npm for minimum supported major
 - [ ] No duplicate pairs; no tiers above workspace major
 - [ ] `.nvmrc` matches workspace major ∩ LTS
+- [ ] Root `@types/node` major matches `.nvmrc` (bump if `nx migrate` left an older major)
 - [ ] [basic-test.yml](../../../.github/workflows/basic-test.yml) and [e2e-test.yml](../../../.github/workflows/e2e-test.yml) `node-version` list all nodes for workspace major
 - [ ] Handoff lists resolved versions per tier (no commit)
