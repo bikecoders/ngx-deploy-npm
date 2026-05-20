@@ -60,7 +60,7 @@ jobs:
   #         echo 'Coverage report'
   #         ls -la ./reports/ngx-deploy-npm/lint-report.info
   #     - name: SonarCloud Scan
-  #       uses: SonarSource/sonarqube-scan-action@v4.2.1
+  #       uses: SonarSource/sonarqube-scan-action@v6
   #       env:
   #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Needed to get PR information, if any
   #         SONAR_TOKEN: ${{ secrets.SONARQUBE_SCANNER }}

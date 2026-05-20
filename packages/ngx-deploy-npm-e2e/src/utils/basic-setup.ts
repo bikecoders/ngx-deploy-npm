@@ -8,6 +8,7 @@ import { logger } from '@nx/devkit';
 
 import { InstallGeneratorOptions } from 'bikecoders/ngx-deploy-npm';
 import { getNxWorkspaceVersion } from './get-nx-workspace-version';
+import { getPublicNpmRegistryEnv } from './npm-env';
 import {
   generateLib,
   initNgxDeployNPMProject,
@@ -19,7 +20,8 @@ export const buildPackageProjectRoot = (libName: string) =>
   `packages/${libName}`;
 
 const executeCommandFactory =
-  (projectDirectory: string) => (command: string) => {
+  (projectDirectory: string, env: NodeJS.ProcessEnv = process.env) =>
+  (command: string) => {
     let output: string;
 
     logger.verbose(`Executing command: ${command}`);
@@ -29,7 +31,7 @@ const executeCommandFactory =
         stdio: ['ignore', 'pipe', 'pipe'], // capture stdout and stderr
         cwd: projectDirectory,
         encoding: 'utf-8',
-        env: process.env,
+        env,
       });
     } catch (error: any) {
       logger.error(`Error executing command: ${command}`);
@@ -289,7 +291,10 @@ async function createTestProject() {
   });
 
   const command = `npx --yes create-nx-workspace@${getNxWorkspaceVersion()} ${projectName} --preset npm --nxCloud=skip --no-interactive`;
-  executeCommandFactory(dirname(projectDirectory))(command);
+  executeCommandFactory(
+    dirname(projectDirectory),
+    getPublicNpmRegistryEnv()
+  )(command);
 
   return projectDirectory;
 }

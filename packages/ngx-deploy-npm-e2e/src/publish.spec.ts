@@ -1,5 +1,5 @@
 import { uniq } from '@nx/plugin/testing';
-import { setup } from './utils';
+import { e2eTestTimeout, e2eTestTimeoutExtended, setup } from './utils';
 
 describe('Publish', () => {
   test.each<{
@@ -48,25 +48,29 @@ describe('Publish', () => {
 
       return tearDown();
     },
-    120000 * 2
+    e2eTestTimeoutExtended()
   );
 
-  it('should NOT publish because it already exists', async () => {
-    const { processedLibs, tearDown, executeCommand } = await setup([
-      { name: uniq('minimal-lib'), generator: 'minimal' },
-    ]);
-    const [uniqLibName] = processedLibs;
+  it(
+    'should NOT publish because it already exists',
+    async () => {
+      const { processedLibs, tearDown, executeCommand } = await setup([
+        { name: uniq('minimal-lib'), generator: 'minimal' },
+      ]);
+      const [uniqLibName] = processedLibs;
 
-    executeCommand(
-      `npx nx deploy ${uniqLibName.name} --tag="e2e" --registry=http://localhost:4873 --packageVersion=0.0.0 --checkExisting="error"`
-    );
-
-    expect(() => {
       executeCommand(
         `npx nx deploy ${uniqLibName.name} --tag="e2e" --registry=http://localhost:4873 --packageVersion=0.0.0 --checkExisting="error"`
       );
-    }).toThrow();
 
-    return tearDown();
-  }, 120000);
+      expect(() => {
+        executeCommand(
+          `npx nx deploy ${uniqLibName.name} --tag="e2e" --registry=http://localhost:4873 --packageVersion=0.0.0 --checkExisting="error"`
+        );
+      }).toThrow();
+
+      return tearDown();
+    },
+    e2eTestTimeout()
+  );
 });

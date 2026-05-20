@@ -1,4 +1,4 @@
-export default {
+module.exports = {
   displayName: 'ngx-deploy-npm',
   preset: '../../jest.preset.js',
   testEnvironment: 'node',
