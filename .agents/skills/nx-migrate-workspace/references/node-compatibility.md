@@ -9,6 +9,7 @@
 - [.github/workflows/backwards-compatibility-test.yml](../../../.github/workflows/backwards-compatibility-test.yml)
 - [.github/workflows/basic-test.yml](../../../.github/workflows/basic-test.yml) (`unit-test` matrix)
 - [.github/workflows/e2e-test.yml](../../../.github/workflows/e2e-test.yml)
+- **`main` branch protection** required status checks — see [branch-protection.md](branch-protection.md)
 
 `nx migrate <major>` is still **one major per run**; this section only aligns CI/`.nvmrc` with whatever major is in the workspace **now**.
 
@@ -137,4 +138,5 @@ Set `devDependencies["@types/node"]` to `^<major>.<latest-patch>` (e.g. `^24.12.
 - [ ] `.nvmrc` matches workspace major ∩ LTS
 - [ ] Root `@types/node` major matches `.nvmrc` (bump if `nx migrate` left an older major)
 - [ ] [basic-test.yml](../../../.github/workflows/basic-test.yml) and [e2e-test.yml](../../../.github/workflows/e2e-test.yml) `node-version` list all nodes for workspace major
+- [ ] `main` branch protection: unit/e2e required contexts use `.nvmrc` on ubuntu + windows ([branch-protection.md](branch-protection.md))
 - [ ] Handoff lists resolved versions per tier (no commit)
