@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
 
@@ -37,7 +37,7 @@ jobs:
   release-preliminar:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
 
       - name: Preliminar Version
@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [release-preliminar, e2e-test, test, backwards-compatibility-test]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
         with:
           git_bot_token: ${{ secrets.GIT_BOT_TOKEN }}
