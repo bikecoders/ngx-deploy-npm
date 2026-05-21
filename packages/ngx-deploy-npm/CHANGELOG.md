@@ -2,6 +2,12 @@
 
 This file was generated using [@jscutlery/semver](https://github.com/jscutlery/semver).
 
+## [9.1.0](https://github.com/bikecoders/ngx-deploy-npm/compare/ngx-deploy-npm-9.0.0...ngx-deploy-npm-9.1.0) (2026-05-21)
+
+### Features
+
+- add Nx 22 support and release v9.1.0 ([#730](https://github.com/bikecoders/ngx-deploy-npm/issues/730)) ([5dccccf](https://github.com/bikecoders/ngx-deploy-npm/commit/5dccccf5bd84c24b1c090aa9731946022d0d5553))
+
 # [9.0.0](https://github.com/bikecoders/ngx-deploy-npm/compare/ngx-deploy-npm-8.4.0...ngx-deploy-npm-9.0.0) (2025-08-24)
 
 ### Bug Fixes
