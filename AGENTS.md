@@ -4,7 +4,7 @@
 # General Guidelines for working with Nx
 
 - For navigating/exploring the workspace, invoke the `nx-workspace` skill first - it has patterns for querying projects, targets, and dependencies
-- For upgrading the Nx workspace version, invoke the `nx-migrate-workspace` skill - `nx migrate` one major at a time; after migrations finish, update backwards-compat CI, basic-test/e2e Node matrices, `.nvmrc`, and root `@types/node` (major aligned with `.nvmrc`) from the version in `package.json`
+- For upgrading the Nx workspace version, invoke the `nx-migrate-workspace` skill - `nx migrate` one major at a time; after migrations finish, update backwards-compat CI, basic-test/e2e Node matrices, `.nvmrc`, root `@types/node` (major aligned with `.nvmrc`), and `main` required status checks for `.nvmrc` Node from the version in `package.json`
 - When running tasks (for example build, lint, test, e2e, etc.), always prefer running the task through `nx` (i.e. `nx run`, `nx run-many`, `nx affected`) instead of using the underlying tooling directly
 - Prefix nx commands with the workspace's package manager (e.g., `pnpm nx build`, `npm exec nx test`) - avoids using globally installed CLI
 - You have access to the Nx MCP server and its tools, use them to help the user
