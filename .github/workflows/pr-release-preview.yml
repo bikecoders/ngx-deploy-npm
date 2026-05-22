@@ -1,0 +1,63 @@
+name: PR Release Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  release-preview:
+    name: Release preview
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup
+
+      - name: Validate PR title
+        id: commitlint
+        run: |
+          if echo "${{ github.event.pull_request.title }}" | npx --no-install commitlint > commitlint.err 2>&1; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate release preview comment
+        id: preview
+        if: always()
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_REF: ${{ github.base_ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          COMMITLINT_OK: ${{ steps.commitlint.outputs.ok == 'true' && '1' || '0' }}
+        run: npx ts-node --transpile-only -O '{"module":"commonjs"}' tools/ci/pr-release-preview.ts
+
+      - name: Find existing preview comment
+        if: always() && steps.preview.outcome != 'skipped'
+        uses: peter-evans/find-comment@v4
+        id: find-comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: github-actions[bot]
+          body-includes: ngx-deploy-npm-release-preview
+
+      - name: Create or update preview comment
+        if: always() && steps.preview.outcome != 'skipped'
+        uses: peter-evans/create-or-update-comment@v5
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          edit-mode: replace
+          body-path: comment.md
+
+      - name: Enforce valid PR title
+        if: steps.commitlint.outputs.ok != 'true'
+        run: |
+          echo "::error::PR title must follow Conventional Commits (see commitlint output in the PR comment)."
+          exit 1
+
+      - name: Enforce release preview succeeded
+        if: steps.preview.outcome == 'failure'
+        run: exit 1
