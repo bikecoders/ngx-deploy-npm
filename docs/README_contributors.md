@@ -104,6 +104,8 @@ On VsCode, create a [_JavaScript Debug Terminal_](https://code.visualstudio.com/
    - We use the commit history to generate the changelog automagically, do your best describing the changes that you introduce 😄. Creating the commit right is essential.
    - We encourage the use of Unit Tests for the fixes and new features. Don't you know how to write Unit Tests? Don't let that stop your contribution; we are here to help 👋.
 5. Make a PR against `main`
+   - We **squash and merge** PRs: the **PR title** becomes the commit message used for versioning and the changelog. Use a [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) title (e.g. `feat: add foo`).
+   - The **PR Release Preview** workflow comments on your PR with the expected version bump and changelog, and **fails** if the title is not a valid conventional commit.
 6. Wait for the review
 7. Merge and Party 🎉
 
