@@ -11,6 +11,7 @@ runs:
     - name: Migrate
       shell: bash
       run: |
+        echo "legacy-peer-deps=true" >> .npmrc
         npx nx migrate ${{ inputs.nx-version }}
-        npm install --force --ignore-scripts
+        npm install --ignore-scripts
         npx nx migrate --run-migrations --if-exists
