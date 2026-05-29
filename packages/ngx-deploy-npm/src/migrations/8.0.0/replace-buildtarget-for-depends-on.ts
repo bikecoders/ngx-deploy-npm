@@ -30,6 +30,25 @@ export type RemovedDeployExecutorOptions = {
 export type DeprecatedDeployExecutorOptions = DeployExecutorOptions &
   RemovedDeployExecutorOptions;
 
+function targetRequiresMigrationCreationDependsOn(
+  target: TargetConfiguration<DeprecatedDeployExecutorOptions>
+) {
+  return (
+    target.executor === 'ngx-deploy-npm:deploy' && // has the right executor
+    target.options?.noBuild !== true // the target will build the library
+  );
+}
+
+function targetRequiresMigration(
+  target: TargetConfiguration<DeprecatedDeployExecutorOptions>
+) {
+  return (
+    target.executor === 'ngx-deploy-npm:deploy' && // has the right executor
+    (target.options?.noBuild !== undefined || // the target will build the library
+      target?.options?.buildTarget !== undefined) // the target has the buildTarget option
+  );
+}
+
 export default async function update(host: Tree) {
   dependsOnMigration(host);
   removeDeprecatedOptionsMigration(host);
@@ -53,15 +72,6 @@ function dependsOnMigration(host: Tree) {
     createDependsOn(projectKey, project);
     updateProjectConfiguration(host, projectKey, project);
   });
-
-  function targetRequiresMigrationCreationDependsOn(
-    target: TargetConfiguration<DeprecatedDeployExecutorOptions>
-  ) {
-    return (
-      target.executor === 'ngx-deploy-npm:deploy' && // has the right executor
-      target.options?.noBuild !== true // the target will build the library
-    );
-  }
 
   function createDependsOn(projectKey: string, project: ProjectConfiguration) {
     const deployExecutors: [
@@ -121,16 +131,6 @@ async function removeDeprecatedOptionsMigration(host: Tree) {
     removeBuildTargetAndNoBuildOptions(project);
     updateProjectConfiguration(host, projectKey, project);
   });
-
-  function targetRequiresMigration(
-    target: TargetConfiguration<DeprecatedDeployExecutorOptions>
-  ) {
-    return (
-      target.executor === 'ngx-deploy-npm:deploy' && // has the right executor
-      (target.options?.noBuild !== undefined || // the target will build the library
-        target?.options?.buildTarget !== undefined) // the target has the buildTarget option
-    );
-  }
 
   function removeBuildTargetAndNoBuildOptions(project: ProjectConfiguration) {
     const deployExecutors: [
