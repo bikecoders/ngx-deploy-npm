@@ -15,6 +15,7 @@
 
 [![Publishment Status][publishment-image]][publishment-link]
 [![Test nx@next][next-tests-image]][next-tests-link]
+[![Test nx@latest][latest-tests-image]][latest-tests-link]
 
 <!-- Images -->
 
@@ -28,6 +29,7 @@
 [downloads-image]: https://img.shields.io/npm/dm/ngx-deploy-npm
 [supported-nx-versions]: https://img.shields.io/badge/nx%20supported%20versions-%3E%3D19.x-143055
 [next-tests-image]: https://github.com/bikecoders/ngx-deploy-npm/actions/workflows/test-nx-next.yml/badge.svg
+[latest-tests-image]: https://github.com/bikecoders/ngx-deploy-npm/actions/workflows/compatibility-observability.yml/badge.svg
 [linux-image]: https://img.shields.io/badge/Linux-FCC624?style=flat&logo=linux&logoColor=black
 [macos-image]: https://img.shields.io/badge/mac%20os-000000?style=flat&logo=macos&logoColor=F0F0F0
 [windows-image]: https://img.shields.io/badge/Windows-0078D6?style=flat&logo=windows&logoColor=white
@@ -40,6 +42,7 @@
 [mit-licence-url]: http://opensource.org/licenses/MIT
 [conventional-commits-url]: https://conventionalcommits.org
 [next-tests-link]: https://github.com/bikecoders/ngx-deploy-npm/actions/workflows/test-nx-next.yml
+[latest-tests-link]: https://github.com/bikecoders/ngx-deploy-npm/actions/workflows/compatibility-observability.yml
 
 ![Cover Image](docs/cover.png)
 

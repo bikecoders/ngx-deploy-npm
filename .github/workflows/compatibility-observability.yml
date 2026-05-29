@@ -1,4 +1,4 @@
-name: Incoming Versions Compatibility Test
+name: Test nx@latest
 on:
   workflow_dispatch:
   schedule:
