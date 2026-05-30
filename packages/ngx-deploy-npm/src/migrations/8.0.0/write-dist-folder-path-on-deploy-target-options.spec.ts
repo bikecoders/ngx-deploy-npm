@@ -94,8 +94,8 @@ describe('write-dist-folder-path-on-deploy-target-options migration', () => {
     addProjectConfiguration(tree, projectKey, unnamedProject);
 
     const projects = getProjects(tree);
-    const projectWithoutName = {
-      ...projects.get(projectKey)!,
+    const projectWithoutName: ProjectConfiguration = {
+      ...unnamedProject,
       name: undefined,
     };
     projects.set(projectKey, projectWithoutName);
