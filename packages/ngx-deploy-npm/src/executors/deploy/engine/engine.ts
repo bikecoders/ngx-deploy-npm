@@ -4,6 +4,7 @@ import * as path from 'node:path';
 
 import {
   setPackageVersion,
+  withTemporaryPackageVersion,
   NpmPublishOptions,
   spawnAsync,
   spawnAsyncMatchStdout,
@@ -97,20 +98,6 @@ function shouldRunExistingCheck(options: DeployExecutorOptions): boolean {
 function logDryRunBanner(options: DeployExecutorOptions): void {
   if (options.dryRun) {
     logger.info('Dry-run: The package is not going to be published');
-  }
-}
-
-async function applyPackageVersionIfNeeded(
-  distFolderPath: string,
-  options: DeployExecutorOptions
-): Promise<void> {
-  /*
-  Modifying the dist when the user is dry-run mode,
-  thanks to the Nx Cache could lead to leading to publishing and unexpected package version
-  when the option is removed
-  */
-  if (options.packageVersion && !options.dryRun) {
-    await setPackageVersion(distFolderPath, options.packageVersion);
   }
 }
 
@@ -211,13 +198,12 @@ async function logPublishSummary(
   logger.info('--------------------------------');
 }
 
-export async function run(
+async function runDeploy(
   distFolderPath: string,
   options: DeployExecutorOptions
-) {
+): Promise<void> {
   try {
     logDryRunBanner(options);
-    await applyPackageVersionIfNeeded(distFolderPath, options);
 
     const npmOptions = extractOnlyNPMOptions(options);
 
@@ -236,6 +222,26 @@ export async function run(
     logger.error('❌ An error occurred!');
     throw error;
   }
+}
+
+export async function run(
+  distFolderPath: string,
+  options: DeployExecutorOptions
+) {
+  if (options.packageVersion && options.dryRun) {
+    await withTemporaryPackageVersion(
+      distFolderPath,
+      options.packageVersion,
+      () => runDeploy(distFolderPath, options)
+    );
+    return;
+  }
+
+  if (options.packageVersion) {
+    await setPackageVersion(distFolderPath, options.packageVersion);
+  }
+
+  await runDeploy(distFolderPath, options);
 }
 
 /**

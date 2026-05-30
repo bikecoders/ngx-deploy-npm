@@ -181,29 +181,81 @@ describe('engine', () => {
   });
 
   describe('Package.json Feature', () => {
-    const pJsonSetup = ({
-      version = '1.0.1-next0',
-      setPackageReturnValue = Promise.resolve(),
-      ...originalSetupOptions
-    }: {
+    type PJsonSetupOptions = {
       version?: string;
       setPackageReturnValue?: Promise<void>;
-    } & SetupOptions) => {
-      jest
-        .spyOn(setPackage, 'setPackageVersion')
-        .mockImplementation(() => setPackageReturnValue);
+      dryRun?: boolean;
+      mockPackageJson?: { name: string; version: string };
+    } & SetupOptions;
 
+    type PJsonSetupResult = ReturnType<typeof setup> & { version: string };
+
+    type PJsonDryRunSetupResult = PJsonSetupResult & {
+      originalContent: string;
+      getCurrentContent: () => string;
+    };
+
+    function pJsonSetup(
+      opts: PJsonSetupOptions & { dryRun: true }
+    ): PJsonDryRunSetupResult;
+    function pJsonSetup(opts?: PJsonSetupOptions): PJsonSetupResult;
+    function pJsonSetup({
+      version = '1.0.1-next0',
+      setPackageReturnValue = Promise.resolve(),
+      dryRun = false,
+      mockPackageJson = { name: '@test/package', version: '1.0.0' },
+      ...originalSetupOptions
+    }: PJsonSetupOptions = {}): PJsonSetupResult | PJsonDryRunSetupResult {
       if (!originalSetupOptions.options) {
         originalSetupOptions.options = { ...defaultOption };
       }
 
       originalSetupOptions.options.packageVersion = version;
 
+      if (dryRun) {
+        originalSetupOptions.options = {
+          ...originalSetupOptions.options,
+          access: npmAccess.public,
+          dryRun: true,
+          packageVersion: version,
+        };
+
+        let currentContent = JSON.stringify(mockPackageJson);
+        const originalContent = currentContent;
+
+        const baseSetup = setup({
+          ...originalSetupOptions,
+          mockPackageJson,
+        });
+
+        jest
+          .spyOn(fileUtils, 'readFileAsync')
+          .mockImplementation(() => Promise.resolve(currentContent));
+
+        jest
+          .spyOn(fileUtils, 'writeFileAsync')
+          .mockImplementation((_, data) => {
+            currentContent = data as string;
+            return Promise.resolve();
+          });
+
+        return {
+          ...baseSetup,
+          version,
+          originalContent,
+          getCurrentContent: () => currentContent,
+        };
+      }
+
+      jest
+        .spyOn(setPackage, 'setPackageVersion')
+        .mockImplementation(() => setPackageReturnValue);
+
       return {
         version,
         ...setup(originalSetupOptions),
       };
-    };
+    }
 
     it('should write the version of the sent on the package.json', async () => {
       const { absoluteDistFolderPath, version, options } = pJsonSetup({});
@@ -216,17 +268,44 @@ describe('engine', () => {
       );
     });
 
-    it('should not write the version of the sent on the package.json if is on dry-run mode', async () => {
-      const { absoluteDistFolderPath, options } = pJsonSetup({
-        options: {
-          access: npmAccess.public,
-          dryRun: true,
-        },
-      });
+    it('should apply packageVersion temporarily during dry-run and restore original package.json', async () => {
+      const {
+        absoluteDistFolderPath,
+        options,
+        originalContent,
+        getCurrentContent,
+      } = pJsonSetup({ dryRun: true });
 
       await engine.run(absoluteDistFolderPath, options);
 
-      expect(setPackage.setPackageVersion).not.toHaveBeenCalled();
+      expect(getCurrentContent()).toEqual(originalContent);
+    });
+
+    it('should restore original package.json during dry-run when publish fails', async () => {
+      const {
+        absoluteDistFolderPath,
+        options,
+        originalContent,
+        getCurrentContent,
+        loggerErrorSpy,
+      } = pJsonSetup({
+        dryRun: true,
+        logError: true,
+        spawnAsyncMock: (_mainProgram, programArgs) => {
+          if (programArgs?.[0] === 'publish') {
+            return Promise.reject(new Error('publish failed'));
+          }
+
+          return Promise.resolve();
+        },
+      });
+
+      await expect(() =>
+        engine.run(absoluteDistFolderPath, options)
+      ).rejects.toThrow('publish failed');
+
+      expect(loggerErrorSpy).toHaveBeenCalledWith('❌ An error occurred!');
+      expect(getCurrentContent()).toEqual(originalContent);
     });
   });
 
@@ -270,6 +349,50 @@ describe('engine', () => {
           mockPackageJson,
           spawnAsyncMock,
         }),
+      };
+    };
+
+    const versionCheckDryRunSetup = ({
+      packageVersion = '2.0.0',
+      mockPackageJson = defaultMockPackageJson,
+      npmViewResult = () => Promise.reject({ code: 'E404' }),
+      ...originalSetupOptions
+    }: {
+      packageVersion?: string;
+      mockPackageJson?: { name: string; version: string };
+      npmViewResult?: () => Promise<void>;
+    } & Omit<
+      Parameters<typeof versionCheckSetup>[0],
+      'mockPackageJson' | 'npmViewResult'
+    > = {}) => {
+      let currentContent = JSON.stringify(mockPackageJson);
+
+      const baseSetup = versionCheckSetup({
+        mockPackageJson,
+        npmViewResult,
+        ...originalSetupOptions,
+        options: {
+          ...defaultOption,
+          checkExisting: 'error',
+          dryRun: true,
+          packageVersion,
+          ...originalSetupOptions.options,
+        },
+      });
+
+      jest
+        .spyOn(fileUtils, 'readFileAsync')
+        .mockImplementation(() => Promise.resolve(currentContent));
+
+      jest.spyOn(fileUtils, 'writeFileAsync').mockImplementation((_, data) => {
+        currentContent = data as string;
+        return Promise.resolve();
+      });
+
+      return {
+        ...baseSetup,
+        packageVersion,
+        getCurrentContent: () => currentContent,
       };
     };
 
@@ -369,6 +492,27 @@ describe('engine', () => {
         'version',
       ]);
       expect(spawn.spawnAsync).not.toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['publish'])
+      );
+    });
+
+    it('should check packageVersion during dry-run instead of dist build version', async () => {
+      const {
+        absoluteDistFolderPath,
+        options,
+        mockPackageJson,
+        packageVersion,
+      } = versionCheckDryRunSetup({});
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(spawn.spawnAsync).toHaveBeenCalledWith('npm', [
+        'view',
+        `${mockPackageJson.name}@${packageVersion}`,
+        'version',
+      ]);
+      expect(spawn.spawnAsync).toHaveBeenCalledWith(
         'npm',
         expect.arrayContaining(['publish'])
       );
