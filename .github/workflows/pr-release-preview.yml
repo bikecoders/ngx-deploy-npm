@@ -33,12 +33,18 @@ jobs:
           COMMITLINT_OK: ${{ steps.commitlint.outputs.ok == 'true' && '1' || '0' }}
         run: npx ts-node --transpile-only -O '{"module":"commonjs"}' tools/ci/pr-release-preview.ts
 
+      - name: Save PR metadata
+        if: always() && steps.preview.outcome != 'skipped'
+        run: echo '${{ github.event.pull_request.number }}' > pr-number.txt
+
       - name: Upload release preview comment
         if: always() && steps.preview.outcome != 'skipped'
         uses: actions/upload-artifact@v7
         with:
           name: release-preview-comment
-          path: comment.md
+          path: |
+            comment.md
+            pr-number.txt
           retention-days: 1
 
       - name: Enforce valid PR title
