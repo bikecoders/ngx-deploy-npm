@@ -41,9 +41,8 @@ function formatAlreadyExistsMessage(
   packageInfo: PackageInfo,
   registry?: string
 ): string {
-  return `Package ${packageInfo.name}@${
-    packageInfo.version
-  } already exists in registry${registry ? ` ${registry}` : ''}.`;
+  const registrySuffix = registry ? ` ${registry}` : '';
+  return `Package ${packageInfo.name}@${packageInfo.version} already exists in registry${registrySuffix}.`;
 }
 
 function formatAlreadyExistsSkipMessage(packageInfo: PackageInfo): string {

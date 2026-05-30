@@ -49,6 +49,62 @@ function targetRequiresMigration(
   );
 }
 
+function createDependsOn(projectKey: string, project: ProjectConfiguration) {
+  const deployExecutors: [
+    string,
+    TargetConfiguration<DeprecatedDeployExecutorOptions>
+  ][] = Object.entries(project.targets ?? {}).filter(
+    ([targetName, targetConfig]) =>
+      targetRequiresMigrationCreationDependsOn(targetConfig)
+  );
+
+  deployExecutors.forEach(([targetName, targetConfig]) => {
+    // store the old buildTarget value
+    const buildTarget = targetConfig.options?.buildTarget;
+
+    // Create targets in case that they doesn't already exists
+    if (!project.targets) {
+      project.targets = {};
+    }
+
+    // If our executor was building the library, it needs to depend on the build target
+    let newDependsOn = 'build';
+    if (typeof buildTarget === 'string') {
+      const newPreDeployTargetName = `pre-${targetName}-build-${buildTarget}`;
+      newDependsOn = newPreDeployTargetName;
+
+      project.targets[newPreDeployTargetName] = {
+        executor: 'nx:run-commands',
+        options: {
+          command: `nx run ${projectKey}:build:${buildTarget}`,
+        },
+      };
+    }
+
+    const dependsOn = project.targets[targetName].dependsOn;
+    if (dependsOn === undefined) {
+      project.targets[targetName].dependsOn = [];
+    }
+
+    project.targets[targetName].dependsOn?.push(newDependsOn);
+  });
+}
+
+function removeBuildTargetAndNoBuildOptions(project: ProjectConfiguration) {
+  const deployExecutors: [
+    string,
+    TargetConfiguration<DeprecatedDeployExecutorOptions>
+  ][] = Object.entries(project.targets ?? {}).filter(([_, targetConfig]) =>
+    targetRequiresMigration(targetConfig)
+  );
+
+  deployExecutors.forEach(([_, targetConfig]) => {
+    // Remove option build target
+    delete targetConfig.options?.buildTarget;
+    delete targetConfig.options?.noBuild;
+  });
+}
+
 export default async function update(host: Tree) {
   dependsOnMigration(host);
   removeDeprecatedOptionsMigration(host);
@@ -72,47 +128,6 @@ function dependsOnMigration(host: Tree) {
     createDependsOn(projectKey, project);
     updateProjectConfiguration(host, projectKey, project);
   });
-
-  function createDependsOn(projectKey: string, project: ProjectConfiguration) {
-    const deployExecutors: [
-      string,
-      TargetConfiguration<DeprecatedDeployExecutorOptions>
-    ][] = Object.entries(project.targets ?? {}).filter(
-      ([targetName, targetConfig]) =>
-        targetRequiresMigrationCreationDependsOn(targetConfig)
-    );
-
-    deployExecutors.forEach(([targetName, targetConfig]) => {
-      // store the old buildTarget value
-      const buildTarget = targetConfig.options?.buildTarget;
-
-      // Create targets in case that they doesn't already exists
-      if (!project.targets) {
-        project.targets = {};
-      }
-
-      // If our executor was building the library, it needs to depend on the build target
-      let newDependsOn = 'build';
-      if (typeof buildTarget === 'string') {
-        const newPreDeployTargetName = `pre-${targetName}-build-${buildTarget}`;
-        newDependsOn = newPreDeployTargetName;
-
-        project.targets[newPreDeployTargetName] = {
-          executor: 'nx:run-commands',
-          options: {
-            command: `nx run ${projectKey}:build:${buildTarget}`,
-          },
-        };
-      }
-
-      const dependsOn = project.targets[targetName].dependsOn;
-      if (dependsOn === undefined) {
-        project.targets[targetName].dependsOn = [];
-      }
-
-      project.targets[targetName].dependsOn?.push(newDependsOn);
-    });
-  }
 }
 
 async function removeDeprecatedOptionsMigration(host: Tree) {
@@ -131,19 +146,4 @@ async function removeDeprecatedOptionsMigration(host: Tree) {
     removeBuildTargetAndNoBuildOptions(project);
     updateProjectConfiguration(host, projectKey, project);
   });
-
-  function removeBuildTargetAndNoBuildOptions(project: ProjectConfiguration) {
-    const deployExecutors: [
-      string,
-      TargetConfiguration<DeprecatedDeployExecutorOptions>
-    ][] = Object.entries(project.targets ?? {}).filter(([_, targetConfig]) =>
-      targetRequiresMigration(targetConfig)
-    );
-
-    deployExecutors.forEach(([_, targetConfig]) => {
-      // Remove option build target
-      delete targetConfig.options?.buildTarget;
-      delete targetConfig.options?.noBuild;
-    });
-  }
 }
