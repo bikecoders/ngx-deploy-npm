@@ -16,11 +16,30 @@ import update, {
 } from './replace-buildtarget-for-depends-on';
 import { DeployExecutorOptions } from '../../executors/deploy/schema';
 
+type ProjectSetup = Record<
+  string,
+  {
+    project: ProjectConfiguration;
+    config: {
+      build: {
+        buildConfigs?: string[];
+      };
+      deploy: Record<
+        string,
+        {
+          preExistedDependsOn?: (TargetDependencyConfig | string)[];
+          options?: RemovedDeployExecutorOptions;
+        }
+      >;
+    };
+  }
+>;
+
 describe('replace-configuration-param-for-depends-on migration', () => {
-  const expectedDeployTarget = (
+  function expectedDeployTarget(
     name: string,
     dependsOn: (TargetDependencyConfig | string)[] = []
-  ): TargetConfiguration<DeployExecutorOptions> => {
+  ): TargetConfiguration<DeployExecutorOptions> {
     const target: TargetConfiguration<DeployExecutorOptions> = {
       executor: 'ngx-deploy-npm:deploy',
       options: {
@@ -34,28 +53,9 @@ describe('replace-configuration-param-for-depends-on migration', () => {
     }
 
     return target;
-  };
+  }
 
-  const setUp = (
-    projects: Record<
-      string,
-      {
-        project: ProjectConfiguration;
-        config: {
-          build: {
-            buildConfigs?: string[];
-          };
-          deploy: Record<
-            string,
-            {
-              preExistedDependsOn?: (TargetDependencyConfig | string)[];
-              options?: RemovedDeployExecutorOptions;
-            }
-          >;
-        };
-      }
-    >
-  ) => {
+  function setup(projects: ProjectSetup = {}) {
     const addConfig = (
       project: ProjectConfiguration,
       config: {
@@ -71,7 +71,6 @@ describe('replace-configuration-param-for-depends-on migration', () => {
         >;
       }
     ) => {
-      // Add build configs
       if (config.build.buildConfigs && project.targets?.build) {
         project.targets.build.options = {
           ...(project.targets.build.options ?? {}),
@@ -82,7 +81,6 @@ describe('replace-configuration-param-for-depends-on migration', () => {
         };
       }
 
-      // Add deploy configs
       Object.entries(config.deploy).forEach(
         ([targetKey, { options, preExistedDependsOn }]) => {
           const deployTarget: TargetConfiguration<DeprecatedDeployExecutorOptions> =
@@ -126,10 +124,33 @@ describe('replace-configuration-param-for-depends-on migration', () => {
     );
 
     return { tree, nonMigratedProjects };
-  };
+  }
+
+  function getAllNgxDeployNPMTargets(tree: Tree) {
+    return Array.from(getProjects(tree)).reduce(
+      (acc, [projectName, project]) => {
+        const everyDeployTargets = Object.entries(project.targets ?? {})
+          .filter(([, target]) => target.executor === 'ngx-deploy-npm:deploy')
+          .map(
+            ([, targetConfig]) =>
+              targetConfig as TargetConfiguration<DeprecatedDeployExecutorOptions>
+          );
+
+        if (everyDeployTargets.length > 0) {
+          acc[projectName] = everyDeployTargets;
+        }
+
+        return acc;
+      },
+      {} as Record<
+        string,
+        TargetConfiguration<DeprecatedDeployExecutorOptions>[]
+      >
+    );
+  }
 
   it('should migrate anything', async () => {
-    const { tree } = setUp({});
+    const { tree } = setup();
 
     const allProjectsBeforeMigration = getProjects(tree);
     await update(tree);
@@ -139,33 +160,25 @@ describe('replace-configuration-param-for-depends-on migration', () => {
   });
 
   describe('Remove Deprecated Options', () => {
-    const setupRemoveDep = ({
-      deployConfig = [
-        {
-          noBuild: true,
-          buildTarget: 'staging',
-        },
-        {
-          noBuild: true,
-          buildTarget: 'production',
-        },
-        {
-          noBuild: true,
-          buildTarget: 'staging',
-        },
-        {
-          noBuild: true,
-          buildTarget: 'production',
-        },
-      ],
-    }: {
-      deployConfig?: [
-        RemovedDeployExecutorOptions,
-        RemovedDeployExecutorOptions,
-        RemovedDeployExecutorOptions,
-        RemovedDeployExecutorOptions
-      ];
-    }) => {
+    function setupRemoveDep(
+      opts: {
+        deployConfig?: [
+          RemovedDeployExecutorOptions,
+          RemovedDeployExecutorOptions,
+          RemovedDeployExecutorOptions,
+          RemovedDeployExecutorOptions
+        ];
+      } = {}
+    ) {
+      const {
+        deployConfig = [
+          { noBuild: true, buildTarget: 'staging' },
+          { noBuild: true, buildTarget: 'production' },
+          { noBuild: true, buildTarget: 'staging' },
+          { noBuild: true, buildTarget: 'production' },
+        ],
+      } = opts;
+
       const PROJECT_NAME = 'PROJECT_NAME';
       const PROJECT_NAME2 = 'PROJECT_NAME2';
 
@@ -183,7 +196,7 @@ describe('replace-configuration-param-for-depends-on migration', () => {
         },
       });
 
-      const { tree } = setUp({
+      const { tree } = setup({
         PROJECT_NAME: {
           project: mocks.getLib(PROJECT_NAME),
           config: projectConfig(),
@@ -194,7 +207,7 @@ describe('replace-configuration-param-for-depends-on migration', () => {
         },
       });
 
-      const expectedDeployTargets = () => ({
+      const expectedDeployTargets = {
         PROJECT_NAME: [
           expectedDeployTarget(PROJECT_NAME),
           expectedDeployTarget(PROJECT_NAME),
@@ -203,27 +216,10 @@ describe('replace-configuration-param-for-depends-on migration', () => {
           expectedDeployTarget(PROJECT_NAME2),
           expectedDeployTarget(PROJECT_NAME2),
         ],
-      });
+      };
 
-      return { tree, PROJECT_NAME, PROJECT_NAME2, expectedDeployTargets };
-    };
-
-    // this is not filtering the projects with the executor
-    const getAllNgxDeployNPMTargets = (tree: Tree) =>
-      Array.from(getProjects(tree)).reduce((acc, [projectName, project]) => {
-        const everyDeployTargets = Object.entries(project.targets ?? {})
-          .filter(([, target]) => target.executor === 'ngx-deploy-npm:deploy')
-          .map(
-            ([, targetConfig]) =>
-              targetConfig as TargetConfiguration<DeprecatedDeployExecutorOptions>
-          );
-
-        if (everyDeployTargets.length > 0) {
-          acc[projectName] = everyDeployTargets;
-        }
-
-        return acc;
-      }, {} as Record<string, TargetConfiguration<DeprecatedDeployExecutorOptions>[]>);
+      return { tree, expectedDeployTargets };
+    }
 
     it("should remove the `noBuild` option when it's set to `true`", async () => {
       const { tree, expectedDeployTargets } = setupRemoveDep({
@@ -236,25 +232,27 @@ describe('replace-configuration-param-for-depends-on migration', () => {
       });
 
       await update(tree);
-      const allDeployTargets = getAllNgxDeployNPMTargets(tree);
 
-      expect(allDeployTargets).toStrictEqual(expectedDeployTargets());
+      expect(getAllNgxDeployNPMTargets(tree)).toStrictEqual(
+        expectedDeployTargets
+      );
     });
 
     it('should remove if the target has `buildTarget` option and `noBuild` is set to `true`', async () => {
       const { tree, expectedDeployTargets } = setupRemoveDep({});
 
       await update(tree);
-      const allDeployTargets = getAllNgxDeployNPMTargets(tree);
 
-      expect(allDeployTargets).toStrictEqual(expectedDeployTargets());
+      expect(getAllNgxDeployNPMTargets(tree)).toStrictEqual(
+        expectedDeployTargets
+      );
     });
   });
 
   describe('Migrate Deprecated Options', () => {
     describe('`buildTarget` should be migrated to use a `dependsOn` instead', () => {
-      it('should migrate anything if `noBuild` is set to true', async () => {
-        const setupOptions: Parameters<typeof setUp>[0] = {
+      function setupNoBuildTrueMigration() {
+        const { tree } = setup({
           shouldNotBeTouchedLib: {
             project: mocks.getLib('shouldNotBeTouchedLib'),
             config: {
@@ -296,24 +294,7 @@ describe('replace-configuration-param-for-depends-on migration', () => {
               },
             },
           },
-        };
-        const { tree } = setUp(setupOptions);
-
-        await update(tree);
-        const allProjectsAfterMigration = getProjects(tree);
-
-        const allDeployTargetsAfterMigration = [];
-        allDeployTargetsAfterMigration.push(
-          allProjectsAfterMigration.get('shouldNotBeTouchedLib')?.targets?.[
-            'publishLocal'
-          ],
-          allProjectsAfterMigration.get('shouldNotBeTouchedLib')?.targets?.[
-            'publishStaging'
-          ],
-          allProjectsAfterMigration.get('shouldNotBeTouchedLib2')?.targets?.[
-            'publishLocal'
-          ]
-        );
+        });
 
         const expectedDeployTargets = [
           expectedDeployTarget('shouldNotBeTouchedLib', [
@@ -324,13 +305,11 @@ describe('replace-configuration-param-for-depends-on migration', () => {
           expectedDeployTarget('shouldNotBeTouchedLib2', ['prePublish:local']),
         ];
 
-        expect(allDeployTargetsAfterMigration).toStrictEqual(
-          expectedDeployTargets
-        );
-      });
+        return { tree, expectedDeployTargets };
+      }
 
-      it('should migration put the `dependsOn` for packages that are being built', async () => {
-        const setupOptions: Parameters<typeof setUp>[0] = {
+      function setupCreateDependsOnMigration() {
+        const { tree } = setup({
           shouldCreateDependsOn: {
             project: mocks.getLib('shouldCreateDependsOn'),
             config: {
@@ -352,26 +331,9 @@ describe('replace-configuration-param-for-depends-on migration', () => {
               },
             },
           },
-        };
-        const { tree } = setUp(setupOptions);
+        });
 
-        await update(tree);
-        const allProjectsAfterMigration = getProjects(tree);
-
-        const allTargetsAfterMigration: Record<
-          string,
-          TargetConfiguration<unknown | DeployExecutorOptions> | undefined
-        > = {
-          publishLocal: allProjectsAfterMigration.get('shouldCreateDependsOn')
-            ?.targets?.['publishLocal'],
-          publishStaging: allProjectsAfterMigration.get('shouldCreateDependsOn')
-            ?.targets?.['publishStaging'],
-        };
-
-        const expectedDeployTargets: Record<
-          string,
-          TargetConfiguration<unknown | DeployExecutorOptions> | undefined
-        > = {
+        const expectedDeployTargets = {
           publishLocal: expectedDeployTarget('shouldCreateDependsOn', [
             'existingDependsOn',
             'build',
@@ -381,11 +343,11 @@ describe('replace-configuration-param-for-depends-on migration', () => {
           ]),
         };
 
-        expect(allTargetsAfterMigration).toStrictEqual(expectedDeployTargets);
-      });
+        return { tree, expectedDeployTargets };
+      }
 
-      it('should create a pre-deploy target when the option `buildTarget` is present', async () => {
-        const setupOptions: Parameters<typeof setUp>[0] = {
+      function setupBuildTargetMigration() {
+        const { tree } = setup({
           shouldCreateDependsOn: {
             project: mocks.getLib('shouldCreateDependsOn'),
             config: {
@@ -409,32 +371,9 @@ describe('replace-configuration-param-for-depends-on migration', () => {
               },
             },
           },
-        };
-        const { tree } = setUp(setupOptions);
+        });
 
-        await update(tree);
-        const allProjectsAfterMigration = getProjects(tree);
-
-        const allTargetsAfterMigration: Record<
-          string,
-          TargetConfiguration<unknown | DeployExecutorOptions> | undefined
-        > = {
-          'pre-publishLocal-build-local': allProjectsAfterMigration.get(
-            'shouldCreateDependsOn'
-          )?.targets?.['pre-publishLocal-build-local'],
-          'pre-publishStaging-build-staging': allProjectsAfterMigration.get(
-            'shouldCreateDependsOn'
-          )?.targets?.['pre-publishStaging-build-staging'],
-          publishLocal: allProjectsAfterMigration.get('shouldCreateDependsOn')
-            ?.targets?.['publishLocal'],
-          publishStaging: allProjectsAfterMigration.get('shouldCreateDependsOn')
-            ?.targets?.['publishStaging'],
-        };
-
-        const expectedDeployTargets: Record<
-          string,
-          TargetConfiguration<unknown | DeployExecutorOptions> | undefined
-        > = {
+        const expectedDeployTargets = {
           'pre-publishLocal-build-local': {
             executor: 'nx:run-commands',
             options: {
@@ -454,6 +393,67 @@ describe('replace-configuration-param-for-depends-on migration', () => {
           publishStaging: expectedDeployTarget('shouldCreateDependsOn', [
             'pre-publishStaging-build-staging',
           ]),
+        };
+
+        return { tree, expectedDeployTargets };
+      }
+
+      it('should migrate anything if `noBuild` is set to true', async () => {
+        const { tree, expectedDeployTargets } = setupNoBuildTrueMigration();
+
+        await update(tree);
+
+        const allProjectsAfterMigration = getProjects(tree);
+        const allDeployTargetsAfterMigration = [
+          allProjectsAfterMigration.get('shouldNotBeTouchedLib')?.targets?.[
+            'publishLocal'
+          ],
+          allProjectsAfterMigration.get('shouldNotBeTouchedLib')?.targets?.[
+            'publishStaging'
+          ],
+          allProjectsAfterMigration.get('shouldNotBeTouchedLib2')?.targets?.[
+            'publishLocal'
+          ],
+        ];
+
+        expect(allDeployTargetsAfterMigration).toStrictEqual(
+          expectedDeployTargets
+        );
+      });
+
+      it('should migration put the `dependsOn` for packages that are being built', async () => {
+        const { tree, expectedDeployTargets } = setupCreateDependsOnMigration();
+
+        await update(tree);
+
+        const allProjectsAfterMigration = getProjects(tree);
+        const allTargetsAfterMigration = {
+          publishLocal: allProjectsAfterMigration.get('shouldCreateDependsOn')
+            ?.targets?.['publishLocal'],
+          publishStaging: allProjectsAfterMigration.get('shouldCreateDependsOn')
+            ?.targets?.['publishStaging'],
+        };
+
+        expect(allTargetsAfterMigration).toStrictEqual(expectedDeployTargets);
+      });
+
+      it('should create a pre-deploy target when the option `buildTarget` is present', async () => {
+        const { tree, expectedDeployTargets } = setupBuildTargetMigration();
+
+        await update(tree);
+
+        const allProjectsAfterMigration = getProjects(tree);
+        const allTargetsAfterMigration = {
+          'pre-publishLocal-build-local': allProjectsAfterMigration.get(
+            'shouldCreateDependsOn'
+          )?.targets?.['pre-publishLocal-build-local'],
+          'pre-publishStaging-build-staging': allProjectsAfterMigration.get(
+            'shouldCreateDependsOn'
+          )?.targets?.['pre-publishStaging-build-staging'],
+          publishLocal: allProjectsAfterMigration.get('shouldCreateDependsOn')
+            ?.targets?.['publishLocal'],
+          publishStaging: allProjectsAfterMigration.get('shouldCreateDependsOn')
+            ?.targets?.['publishStaging'],
         };
 
         expect(allTargetsAfterMigration).toStrictEqual(expectedDeployTargets);

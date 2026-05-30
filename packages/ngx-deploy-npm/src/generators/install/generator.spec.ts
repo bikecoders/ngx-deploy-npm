@@ -6,6 +6,7 @@ import {
   TargetConfiguration,
   createProjectGraphAsync,
   ProjectGraph,
+  logger,
 } from '@nx/devkit';
 
 import generator from './generator';
@@ -55,10 +56,14 @@ describe('install generator', () => {
 
         return acc;
       }, {} as Record<string, true>),
+    projectGraphError,
+    projectGraphExclude = [],
   }: {
     workspaceProjects?: Record<string, ProjectConfiguration>;
     workspacePublishableLibs?: Record<string, true>;
-  }) => {
+    projectGraphError?: Error;
+    projectGraphExclude?: string[];
+  } = {}) => {
     const workspaceConfig = new Map();
     const appTree = createTreeWithEmptyWorkspace();
 
@@ -82,8 +87,13 @@ describe('install generator', () => {
         typeof createProjectGraphAsync
       >
     ).mockImplementation(async () => {
-      const nodes = Object.entries(workspaceProjects).reduce(
-        (acc, [projectName, projectConfig]) => {
+      if (projectGraphError) {
+        throw projectGraphError;
+      }
+
+      const nodes = Object.entries(workspaceProjects)
+        .filter(([projectName]) => !projectGraphExclude.includes(projectName))
+        .reduce((acc, [projectName, projectConfig]) => {
           acc[projectName] = {
             name: projectName,
             type: 'lib',
@@ -94,9 +104,7 @@ describe('install generator', () => {
             },
           };
           return acc;
-        },
-        {} as ProjectGraph['nodes']
-      );
+        }, {} as ProjectGraph['nodes']);
 
       return {
         nodes,
@@ -104,12 +112,16 @@ describe('install generator', () => {
       };
     });
 
+    const loggerErrorSpy = projectGraphError
+      ? jest.spyOn(logger, 'error').mockImplementation(() => undefined)
+      : undefined;
+
     // Create workspace
     Array.from(workspaceConfig.entries()).forEach(([key, projectConfig]) =>
       addProjectConfiguration(appTree, key, projectConfig)
     );
 
-    return { appTree };
+    return { appTree, loggerErrorSpy };
   };
 
   const buildMockDistPath = (projectName: string) => {
@@ -283,6 +295,55 @@ describe('install generator', () => {
         project?.targets?.deploy.options;
 
       expect(targetOptions.access).toEqual(npmAccess.restricted);
+    });
+  });
+
+  describe('build target detection', () => {
+    it('should not add dependsOn when project is missing from project graph', async () => {
+      const projectName = 'graphMissingLib';
+      const { appTree } = setup({
+        workspaceProjects: {
+          [projectName]: mocks.getLib(projectName),
+        },
+        workspacePublishableLibs: { [projectName]: true },
+        projectGraphExclude: [projectName],
+      });
+
+      await generator(appTree, {
+        project: projectName,
+        distFolderPath: buildMockDistPath(projectName),
+        access: npmAccess.public,
+      });
+
+      const targetDeploy =
+        getProjects(appTree).get(projectName)?.targets?.deploy;
+
+      expect(targetDeploy?.dependsOn).toBeUndefined();
+    });
+
+    it('should not add dependsOn and log error when project graph fails', async () => {
+      const projectName = 'graphErrorLib';
+      const { appTree, loggerErrorSpy } = setup({
+        workspaceProjects: {
+          [projectName]: mocks.getLib(projectName),
+        },
+        workspacePublishableLibs: { [projectName]: true },
+        projectGraphError: new Error('graph error'),
+      });
+
+      await generator(appTree, {
+        project: projectName,
+        distFolderPath: buildMockDistPath(projectName),
+        access: npmAccess.public,
+      });
+
+      const targetDeploy =
+        getProjects(appTree).get(projectName)?.targets?.deploy;
+
+      expect(loggerErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Error detecting build target')
+      );
+      expect(targetDeploy?.dependsOn).toBeUndefined();
     });
   });
 

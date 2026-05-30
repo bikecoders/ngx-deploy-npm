@@ -6,7 +6,14 @@ import { mockProjectRoot } from '../../__mocks__/mocks';
 import { DeployExecutorOptions } from './schema';
 
 describe('Deploy', () => {
-  const setup = () => {
+  function setup(
+    opts: {
+      distFolderPath?: string;
+      access?: DeployExecutorOptions['access'];
+    } = {}
+  ) {
+    const { distFolderPath = 'dist/libs/project', access = 'public' } = opts;
+
     const PROJECT = 'RANDOM-PROJECT';
     const mockEngine = {
       run: jest.fn().mockImplementation(() => () => Promise.resolve()),
@@ -21,19 +28,25 @@ describe('Deploy', () => {
       projectGraph: {},
     } as nxDevKit.ExecutorContext;
 
+    const options: DeployExecutorOptions = {
+      distFolderPath,
+      access,
+    };
+
     return {
       PROJECT,
       context,
       mockEngine,
+      options,
     };
-  };
+  }
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
 
   it('should invoke the engine', async () => {
-    const { mockEngine, context } = setup();
-    const options: DeployExecutorOptions = {
-      distFolderPath: 'dist/libs/project',
-      access: 'public',
-    };
+    const { mockEngine, context, options } = setup();
 
     await deploy(mockEngine, context, options);
 

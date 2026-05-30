@@ -1,3 +1,4 @@
+import { logger } from '@nx/devkit';
 import { DeployExecutorOptions } from '../schema';
 import { npmAccess } from '../../../core';
 import * as engine from './engine';
@@ -18,12 +19,8 @@ describe('engine', () => {
     Object.freeze({
       access: npmAccess.public,
     });
-  const setup = ({
-    options = defaultOption,
-    rootProject = mockProjectRoot,
-    distFolderPath = mockProjectDist(),
-    spawnAsyncMock = () => Promise.resolve(),
-  }: {
+
+  type SetupOptions = {
     rootProject?: string;
     distFolderPath?: string;
     spawnAsyncMock?: (
@@ -31,7 +28,14 @@ describe('engine', () => {
       programArgs?: string[]
     ) => Promise<void>;
     options?: Omit<DeployExecutorOptions, 'distFolderPath'>;
-  }) => {
+  };
+
+  const setup = ({
+    options = defaultOption,
+    rootProject = mockProjectRoot,
+    distFolderPath = mockProjectDist(),
+    spawnAsyncMock = () => Promise.resolve(),
+  }: SetupOptions = {}) => {
     const fullOptions: DeployExecutorOptions = {
       ...options,
       distFolderPath,
@@ -98,7 +102,7 @@ describe('engine', () => {
     }: {
       version?: string;
       setPackageReturnValue?: Promise<void>;
-    } & Parameters<typeof setup>[0]) => {
+    } & SetupOptions) => {
       jest
         .spyOn(setPackage, 'setPackageVersion')
         .mockImplementation(() => setPackageReturnValue);
@@ -157,14 +161,18 @@ describe('engine', () => {
       npmViewResult?: () => Promise<void>;
       npmPublishResult?: () => Promise<void>;
       defaultSpawnMock?: () => Promise<void>;
-    } & Omit<Parameters<typeof setup>[0], 'spawnAsyncMock'>) => {
+    } & Omit<SetupOptions, 'spawnAsyncMock'>) => {
       jest
         .spyOn(fileUtils, 'readFileAsync')
         .mockImplementation(() =>
           Promise.resolve(JSON.stringify(mockPackageJson))
         );
 
-      const spawnAsyncMock: Parameters<typeof setup>[0]['spawnAsyncMock'] = (
+      const loggerWarnSpy = jest
+        .spyOn(logger, 'warn')
+        .mockImplementation(() => undefined);
+
+      const spawnAsyncMock: SetupOptions['spawnAsyncMock'] = (
         _: string,
         args?: string[]
       ): Promise<void> => {
@@ -177,6 +185,7 @@ describe('engine', () => {
 
       return {
         mockPackageJson,
+        loggerWarnSpy,
         ...setup({
           ...originalSetupOptions,
           spawnAsyncMock,
@@ -272,6 +281,97 @@ describe('engine', () => {
         '--access',
         'public',
       ]);
+    });
+
+    it('should pass registry to npm view when checking existing package', async () => {
+      const registry = 'http://localhost:4873';
+      const { absoluteDistFolderPath, options, mockPackageJson } =
+        versionCheckSetup({
+          options: {
+            ...defaultOption,
+            checkExisting: 'warning',
+            registry,
+          },
+        });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(spawn.spawnAsync).toHaveBeenCalledWith('npm', [
+        'view',
+        `${mockPackageJson.name}@${mockPackageJson.version}`,
+        'version',
+        '--registry',
+        registry,
+      ]);
+    });
+
+    it('should log a warning when package exists and checkExisting is warning', async () => {
+      const { absoluteDistFolderPath, options, loggerWarnSpy } =
+        versionCheckSetup({
+          options: {
+            ...defaultOption,
+            checkExisting: 'warning',
+          },
+        });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(loggerWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'already exists in registry. Skipping  publish.'
+        )
+      );
+    });
+  });
+
+  describe('Dry run', () => {
+    function setupDryRun(opts: { dryRun?: boolean } = {}) {
+      const { dryRun = true } = opts;
+      const loggerInfoSpy = jest
+        .spyOn(logger, 'info')
+        .mockImplementation(() => undefined);
+
+      return {
+        loggerInfoSpy,
+        ...setup({
+          options: {
+            ...defaultOption,
+            dryRun,
+          },
+        }),
+      };
+    }
+
+    it('should log dry-run banner and options when dryRun is enabled', async () => {
+      const { absoluteDistFolderPath, options, loggerInfoSpy } = setupDryRun();
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(loggerInfoSpy).toHaveBeenCalledWith(
+        'Dry-run: The package is not going to be published'
+      );
+      expect(loggerInfoSpy).toHaveBeenCalledWith('The options are:');
+    });
+  });
+
+  describe('Successful publish', () => {
+    function setupSuccessfulPublish(opts: SetupOptions = {}) {
+      const loggerInfoSpy = jest
+        .spyOn(logger, 'info')
+        .mockImplementation(() => undefined);
+
+      return { loggerInfoSpy, ...setup(opts) };
+    }
+
+    it('should log success message on successful publish', async () => {
+      const { absoluteDistFolderPath, options, loggerInfoSpy } =
+        setupSuccessfulPublish();
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(loggerInfoSpy).toHaveBeenCalledWith(
+        '🚀 Successfully published via ngx-deploy-npm! Have a nice day!'
+      );
     });
   });
 });

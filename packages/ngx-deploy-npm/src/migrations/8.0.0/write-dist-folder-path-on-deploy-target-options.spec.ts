@@ -5,7 +5,9 @@ import {
   Tree,
   addProjectConfiguration,
   getProjects,
+  logger,
 } from '@nx/devkit';
+import * as devkit from '@nx/devkit';
 import * as mocks from '../../__mocks__/mocks';
 
 import update, {
@@ -13,32 +15,31 @@ import update, {
 } from './write-dist-folder-path-on-deploy-target-options';
 
 describe('write-dist-folder-path-on-deploy-target-options migration', () => {
-  const setUp = () => {
-    const addTargets = (
-      project: ProjectConfiguration,
-      addDistFolderPathOption = true
-    ) => {
-      if (!project.targets) {
-        project.targets = {};
-      }
+  function addTargets(
+    project: ProjectConfiguration,
+    addDistFolderPathOption = true
+  ): ProjectConfiguration {
+    if (!project.targets) {
+      project.targets = {};
+    }
 
-      const deployTarget: TargetConfiguration<DeprecatedDeployExecutorOptions> =
-        {
-          executor: 'ngx-deploy-npm:deploy',
-          options: {
-            distFolderPath: addDistFolderPathOption
-              ? `dist/libs/${project.name}`
-              : undefined,
-            access: 'public',
-          },
-        };
-
-      project.targets.deploy = deployTarget;
-      project.targets.publish = deployTarget;
-
-      return project;
+    const deployTarget: TargetConfiguration<DeprecatedDeployExecutorOptions> = {
+      executor: 'ngx-deploy-npm:deploy',
+      options: {
+        distFolderPath: addDistFolderPathOption
+          ? `dist/libs/${project.name}`
+          : undefined,
+        access: 'public',
+      },
     };
 
+    project.targets.deploy = deployTarget;
+    project.targets.publish = deployTarget;
+
+    return project;
+  }
+
+  function setup() {
     const nonMigratedProjects: Record<string, ProjectConfiguration> = {
       WITH_distFolderPathOption: addTargets(
         mocks.getLib('WITH_distFolderPathOption')
@@ -63,10 +64,59 @@ describe('write-dist-folder-path-on-deploy-target-options migration', () => {
     );
 
     return { tree, nonMigratedProjects };
-  };
+  }
+
+  function setupUntouchedProjectsCheck() {
+    const { tree } = setup();
+
+    const getNonMigratedProjects = (host: Tree) => {
+      const allProjects = getProjects(host);
+      return {
+        projectBefore: allProjects.get('projectBefore'),
+        WITH_distFolderPathOption: allProjects.get('WITH_distFolderPathOption'),
+        app: allProjects.get('app'),
+        nonPublishable: allProjects.get('nonPublishable'),
+      };
+    };
+
+    return {
+      tree,
+      nonMigratedProjectsBefore: getNonMigratedProjects(tree),
+      getNonMigratedProjects,
+    };
+  }
+
+  function setupUnnamedProjectWarning(opts: { projectKey?: string } = {}) {
+    const { projectKey = 'UNNAMED_PROJECT' } = opts;
+    const { tree } = setup();
+
+    const unnamedProject = addTargets(mocks.getLib(projectKey), false);
+    addProjectConfiguration(tree, projectKey, unnamedProject);
+
+    const projects = getProjects(tree);
+    const projectWithoutName = {
+      ...projects.get(projectKey)!,
+      name: undefined,
+    };
+    projects.set(projectKey, projectWithoutName);
+
+    const getProjectsSpy = jest
+      .spyOn(devkit, 'getProjects')
+      .mockReturnValue(projects);
+
+    const loggerWarnSpy = jest
+      .spyOn(logger, 'warn')
+      .mockImplementation(() => undefined);
+
+    return { tree, projectKey, getProjectsSpy, loggerWarnSpy };
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
 
   it('should set up the distFolderPath option on the right projects', async () => {
-    const { tree } = setUp();
+    const { tree } = setup();
 
     await update(tree);
 
@@ -93,7 +143,7 @@ describe('write-dist-folder-path-on-deploy-target-options migration', () => {
   });
 
   it('should set up the distFolderPath option with the right value', async () => {
-    const { tree } = setUp();
+    const { tree } = setup();
 
     await update(tree);
 
@@ -111,22 +161,23 @@ describe('write-dist-folder-path-on-deploy-target-options migration', () => {
   });
 
   it('should not touch other projects', async () => {
-    const { tree } = setUp();
-    const getNonMigratedProjects = (tree: Tree) => {
-      const allProjects = getProjects(tree);
-      return {
-        projectBefore: allProjects.get('projectBefore'),
-        WITH_distFolderPathOption: allProjects.get('WITH_distFolderPathOption'),
-        app: allProjects.get('app'),
-        nonPublishable: allProjects.get('nonPublishable'),
-      };
-    };
-    const nonMigratedProjectsBefore = getNonMigratedProjects(tree);
+    const { tree, nonMigratedProjectsBefore, getNonMigratedProjects } =
+      setupUntouchedProjectsCheck();
 
     await update(tree);
 
-    const nonMigratedProjectsAfter = getNonMigratedProjects(tree);
+    expect(nonMigratedProjectsBefore).toStrictEqual(
+      getNonMigratedProjects(tree)
+    );
+  });
 
-    expect(nonMigratedProjectsBefore).toStrictEqual(nonMigratedProjectsAfter);
+  it('should warn and skip projects without a name', async () => {
+    const { tree, loggerWarnSpy } = setupUnnamedProjectWarning();
+
+    await update(tree);
+
+    expect(loggerWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("doesn't have a name")
+    );
   });
 });
