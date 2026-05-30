@@ -249,6 +249,9 @@ function extractOnlyNPMOptions({
   otp,
   dryRun,
   registry,
+  provenance,
+  provenanceFile,
+  ignoreScripts,
 }: DeployExecutorOptions): NpmPublishOptions {
   return {
     access,
@@ -256,6 +259,9 @@ function extractOnlyNPMOptions({
     otp,
     dryRun,
     registry,
+    provenance,
+    provenanceFile,
+    ignoreScripts,
   };
 }
 
@@ -264,19 +270,26 @@ function toKebabCase(str: string) {
 }
 
 function getOptionsStringArr(options: NpmPublishOptions): string[] {
-  return (
-    Object.keys(options)
-      // Get only options with value
-      .filter(optKey => !!(options as Record<string, unknown>)[optKey])
-      // to CMD option
-      .map(optKey => ({
-        cmdOptions: `--${toKebabCase(optKey)}`,
-        value: (options as Record<string, string | boolean | number>)[optKey],
-      }))
-      // push the command and the value to the array
-      .flatMap(cmdOptionValue => [
-        cmdOptionValue.cmdOptions,
-        cmdOptionValue.value.toString(),
-      ])
-  );
+  return Object.entries(options).flatMap(([optKey, value]) => {
+    if (
+      value === undefined ||
+      value === null ||
+      value === false ||
+      value === ''
+    ) {
+      return [];
+    }
+
+    const cmdOption = `--${toKebabCase(optKey)}`;
+
+    if (typeof value === 'boolean') {
+      return [cmdOption];
+    }
+
+    if (typeof value === 'string' || typeof value === 'number') {
+      return [cmdOption, String(value)];
+    }
+
+    return [];
+  });
 }
