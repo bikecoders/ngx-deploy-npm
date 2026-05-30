@@ -193,6 +193,46 @@ describe('engine', () => {
       };
     };
 
+    it('should not run duplicate check when checkExisting is unset', async () => {
+      const { absoluteDistFolderPath, options } = versionCheckSetup({
+        options: {
+          ...defaultOption,
+        },
+      });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(spawn.spawnAsync).not.toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['view'])
+      );
+      expect(spawn.spawnAsync).toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['publish'])
+      );
+    });
+
+    it('should not run duplicate check when checkExisting is unset even if checkTag is enabled', async () => {
+      const { absoluteDistFolderPath, options } = versionCheckSetup({
+        options: {
+          ...defaultOption,
+          checkTag: true,
+          tag: 'next',
+        },
+      });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(spawn.spawnAsync).not.toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['view'])
+      );
+      expect(spawn.spawnAsync).toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['publish'])
+      );
+    });
+
     it('should skip publishing when package exists and checkExisting is warning', async () => {
       const { absoluteDistFolderPath, options, mockPackageJson } =
         versionCheckSetup({
@@ -317,10 +357,124 @@ describe('engine', () => {
       await engine.run(absoluteDistFolderPath, options);
 
       expect(loggerWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'already exists in registry. Skipping  publish.'
-        )
+        expect.stringContaining('already exists in registry. Skipping publish.')
       );
+    });
+
+    it('should skip publishing silently when package exists and checkExisting is skip', async () => {
+      const { absoluteDistFolderPath, options, loggerWarnSpy } =
+        versionCheckSetup({
+          options: {
+            ...defaultOption,
+            checkExisting: 'skip',
+          },
+        });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(loggerWarnSpy).not.toHaveBeenCalled();
+      expect(spawn.spawnAsync).not.toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['publish'])
+      );
+    });
+
+    it('should include registry in warning when package exists and checkExisting is warning', async () => {
+      const registry = 'http://localhost:4873';
+      const {
+        absoluteDistFolderPath,
+        options,
+        loggerWarnSpy,
+        mockPackageJson,
+      } = versionCheckSetup({
+        options: {
+          ...defaultOption,
+          checkExisting: 'warning',
+          registry,
+        },
+      });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(loggerWarnSpy).toHaveBeenCalledWith(
+        `Package ${mockPackageJson.name}@${mockPackageJson.version} already exists in registry ${registry}. Skipping publish.`
+      );
+    });
+
+    it('should include registry in error when package exists and checkExisting is error', async () => {
+      const registry = 'http://localhost:4873';
+      const { absoluteDistFolderPath, options, mockPackageJson } =
+        versionCheckSetup({
+          options: {
+            ...defaultOption,
+            checkExisting: 'error',
+            registry,
+          },
+        });
+
+      await expect(() =>
+        engine.run(absoluteDistFolderPath, options)
+      ).rejects.toThrow(
+        `Package ${mockPackageJson.name}@${mockPackageJson.version} already exists in registry ${registry}.`
+      );
+    });
+
+    it('should skip duplicate check when checkTag is true and tag is latest', async () => {
+      const { absoluteDistFolderPath, options } = versionCheckSetup({
+        options: {
+          ...defaultOption,
+          checkExisting: 'warning',
+          checkTag: true,
+        },
+      });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(spawn.spawnAsync).not.toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['view'])
+      );
+      expect(spawn.spawnAsync).toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['publish'])
+      );
+    });
+
+    it('should skip duplicate check when checkTag is true and tag is unset', async () => {
+      const { absoluteDistFolderPath, options } = versionCheckSetup({
+        options: {
+          ...defaultOption,
+          checkExisting: 'error',
+          checkTag: true,
+        },
+      });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(spawn.spawnAsync).not.toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['view'])
+      );
+    });
+
+    it('should run duplicate check when checkTag is true and tag is not latest', async () => {
+      const { absoluteDistFolderPath, options, mockPackageJson } =
+        versionCheckSetup({
+          options: {
+            ...defaultOption,
+            checkExisting: 'warning',
+            checkTag: true,
+            tag: 'next',
+          },
+        });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(spawn.spawnAsync).toHaveBeenCalledWith('npm', [
+        'view',
+        `${mockPackageJson.name}@${mockPackageJson.version}`,
+        'version',
+      ]);
     });
   });
 

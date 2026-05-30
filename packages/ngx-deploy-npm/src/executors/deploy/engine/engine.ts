@@ -6,7 +6,7 @@ import { setPackageVersion, NpmPublishOptions, spawnAsync } from '../utils';
 import { DeployExecutorOptions } from '../schema';
 
 type PackageInfo = { name: string; version: string };
-type ExistingPackagePolicy = 'error' | 'warning';
+type ExistingPackagePolicy = 'error' | 'warning' | 'skip';
 
 async function checkIfPackageExists(
   packageName: string,
@@ -45,8 +45,14 @@ function formatAlreadyExistsMessage(
   return `Package ${packageInfo.name}@${packageInfo.version} already exists in registry${registrySuffix}.`;
 }
 
-function formatAlreadyExistsSkipMessage(packageInfo: PackageInfo): string {
-  return `Package ${packageInfo.name}@${packageInfo.version} already exists in registry. Skipping  publish.`;
+function formatAlreadyExistsSkipPublishMessage(
+  packageInfo: PackageInfo,
+  registry?: string
+): string {
+  return `${formatAlreadyExistsMessage(
+    packageInfo,
+    registry
+  )} Skipping publish.`;
 }
 
 const whenPackageExists: Record<
@@ -56,15 +62,31 @@ const whenPackageExists: Record<
   error: (packageInfo, registry) => {
     throw new Error(formatAlreadyExistsMessage(packageInfo, registry));
   },
-  warning: packageInfo => {
-    logger.warn(formatAlreadyExistsSkipMessage(packageInfo));
+  warning: (packageInfo, registry) => {
+    logger.warn(formatAlreadyExistsSkipPublishMessage(packageInfo, registry));
   },
+  skip: () => undefined,
 };
 
 function isCheckExistingEnabled(
   checkExisting: DeployExecutorOptions['checkExisting']
 ): checkExisting is ExistingPackagePolicy {
-  return !!checkExisting && ['error', 'warning'].includes(checkExisting);
+  return (
+    !!checkExisting && ['error', 'warning', 'skip'].includes(checkExisting)
+  );
+}
+
+function shouldRunExistingCheck(options: DeployExecutorOptions): boolean {
+  if (!isCheckExistingEnabled(options.checkExisting)) {
+    return false;
+  }
+
+  if (options.checkTag) {
+    const publishTag = options.tag ?? 'latest';
+    return publishTag !== 'latest';
+  }
+
+  return true;
 }
 
 function logDryRunBanner(options: DeployExecutorOptions): void {
@@ -92,7 +114,12 @@ async function ensurePublishAllowed(
   options: DeployExecutorOptions,
   npmOptions: NpmPublishOptions
 ): Promise<boolean> {
-  if (!isCheckExistingEnabled(options.checkExisting)) {
+  const { checkExisting } = options;
+
+  if (
+    !isCheckExistingEnabled(checkExisting) ||
+    !shouldRunExistingCheck(options)
+  ) {
     return true;
   }
 
@@ -107,7 +134,7 @@ async function ensurePublishAllowed(
     return true;
   }
 
-  whenPackageExists[options.checkExisting](packageInfo, options.registry);
+  whenPackageExists[checkExisting](packageInfo, options.registry);
 
   return false;
 }

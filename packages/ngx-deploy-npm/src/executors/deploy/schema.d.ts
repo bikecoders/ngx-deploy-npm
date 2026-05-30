@@ -30,5 +30,9 @@ export interface DeployExecutorOptions {
   /**
    * Check if the package version already exists before publishing
    */
-  checkExisting?: 'error' | 'warning';
+  checkExisting?: 'error' | 'warning' | 'skip';
+  /**
+   * When true, only run the checkExisting duplicate version check when publishing to a non-latest tag
+   */
+  checkTag?: boolean;
 }
