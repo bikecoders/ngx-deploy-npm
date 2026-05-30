@@ -101,7 +101,6 @@ describe('engine', () => {
       '--otp',
       'someValue',
       '--dry-run',
-      'true',
       '--registry',
       'http://localhost:4873',
     ];
@@ -121,6 +120,50 @@ describe('engine', () => {
       'publish',
       absoluteDistFolderPath,
       ...expectedOptionsArray,
+    ]);
+  });
+
+  it('should forward common npm publish passthrough flags', async () => {
+    const expectedOptionsArray = [
+      '--access',
+      npmAccess.public,
+      '--provenance',
+      '--ignore-scripts',
+    ];
+    const { absoluteDistFolderPath, options } = setup({
+      options: {
+        access: npmAccess.public,
+        provenance: true,
+        ignoreScripts: true,
+      },
+    });
+
+    await engine.run(absoluteDistFolderPath, options);
+
+    expect(spawn.spawnAsync).toHaveBeenCalledWith('npm', [
+      'publish',
+      absoluteDistFolderPath,
+      ...expectedOptionsArray,
+    ]);
+  });
+
+  it('should forward provenanceFile as a string option', async () => {
+    const { absoluteDistFolderPath, options } = setup({
+      options: {
+        access: npmAccess.public,
+        provenanceFile: '/tmp/provenance.json',
+      },
+    });
+
+    await engine.run(absoluteDistFolderPath, options);
+
+    expect(spawn.spawnAsync).toHaveBeenCalledWith('npm', [
+      'publish',
+      absoluteDistFolderPath,
+      '--access',
+      npmAccess.public,
+      '--provenance-file',
+      '/tmp/provenance.json',
     ]);
   });
 

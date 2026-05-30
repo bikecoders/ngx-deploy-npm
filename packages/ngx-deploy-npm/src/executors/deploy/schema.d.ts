@@ -28,6 +28,18 @@ export interface DeployExecutorOptions {
    */
   dryRun?: boolean;
   /**
+   * When publishing from a supported cloud CI/CD system, the package will be publicly linked to where it was built and published from. Cannot be used with provenanceFile.
+   */
+  provenance?: boolean;
+  /**
+   * When publishing, the provenance bundle at the given path will be used. Cannot be used with provenance.
+   */
+  provenanceFile?: string;
+  /**
+   * If true, npm does not run scripts specified in package.json during publish.
+   */
+  ignoreScripts?: boolean;
+  /**
    * Check if the package version already exists before publishing
    */
   checkExisting?: 'error' | 'warning' | 'skip';

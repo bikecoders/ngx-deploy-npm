@@ -37,6 +37,20 @@
       "description": "For testing: Run through without making any changes. Execute with --dry-run and nothing will happen.",
       "default": false
     },
+    "provenance": {
+      "type": "boolean",
+      "description": "When publishing from a supported cloud CI/CD system, the package will be publicly linked to where it was built and published from. Cannot be used with provenanceFile.",
+      "default": false
+    },
+    "provenanceFile": {
+      "type": "string",
+      "description": "When publishing, the provenance bundle at the given path will be used. Cannot be used with provenance."
+    },
+    "ignoreScripts": {
+      "type": "boolean",
+      "description": "If true, npm does not run scripts specified in package.json during publish.",
+      "default": false
+    },
     "checkExisting": {
       "type": "string",
       "description": "How to handle existing package versions: 'warning' to skip publishing with a warning, 'error' to abort publishing, 'skip' to skip publishing silently",
