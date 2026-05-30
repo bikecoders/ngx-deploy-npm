@@ -2,11 +2,20 @@ import { logger } from '@nx/devkit';
 import * as fileUtils from '../../../utils';
 import * as path from 'node:path';
 
-import { setPackageVersion, NpmPublishOptions, spawnAsync } from '../utils';
+import {
+  setPackageVersion,
+  NpmPublishOptions,
+  spawnAsync,
+  spawnAsyncMatchStdout,
+} from '../utils';
 import { DeployExecutorOptions } from '../schema';
 
 type PackageInfo = { name: string; version: string };
 type ExistingPackagePolicy = 'error' | 'warning' | 'skip';
+
+const NPM_PACK_TARBALL_SIZE_PATTERN = /"size":\s*(\d+)/;
+const DEFAULT_REGISTRY = 'https://registry.npmjs.org/';
+const DEFAULT_TAG = 'latest';
 
 async function checkIfPackageExists(
   packageName: string,
@@ -157,6 +166,53 @@ function logDryRunFooter(options: DeployExecutorOptions): void {
   }
 }
 
+function formatTarballSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function getTarballSize(
+  distFolderPath: string
+): Promise<number | undefined> {
+  try {
+    const tarballSize = await spawnAsyncMatchStdout(
+      'npm',
+      ['pack', '--dry-run', '--json', distFolderPath],
+      NPM_PACK_TARBALL_SIZE_PATTERN
+    );
+
+    return tarballSize === undefined ? undefined : Number(tarballSize);
+  } catch {
+    return undefined;
+  }
+}
+
+async function logPublishSummary(
+  distFolderPath: string,
+  npmOptions: NpmPublishOptions
+): Promise<void> {
+  const packageInfo = await getPackageInfo(distFolderPath);
+  const tag = npmOptions.tag ?? DEFAULT_TAG;
+  const registry = npmOptions.registry ?? DEFAULT_REGISTRY;
+  const tarballSize = await getTarballSize(distFolderPath);
+  const tarballLabel =
+    tarballSize === undefined ? 'unknown' : formatTarballSize(tarballSize);
+
+  logger.info('📦 Published package summary:');
+  logger.info(`   name:     ${packageInfo.name}`);
+  logger.info(`   version:  ${packageInfo.version}`);
+  logger.info(`   tag:      ${tag}`);
+  logger.info(`   registry: ${registry}`);
+  logger.info(`   tarball:  ${tarballLabel}`);
+}
+
 export async function run(
   distFolderPath: string,
   options: DeployExecutorOptions
@@ -173,6 +229,7 @@ export async function run(
 
     await publishPackage(distFolderPath, npmOptions);
     logDryRunFooter(options);
+    await logPublishSummary(distFolderPath, npmOptions);
 
     logger.info(
       '🚀 Successfully published via ngx-deploy-npm! Have a nice day!'

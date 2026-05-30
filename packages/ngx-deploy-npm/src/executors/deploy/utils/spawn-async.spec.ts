@@ -1,6 +1,6 @@
 import { logger } from '@nx/devkit';
 
-import { spawnAsync } from './spawn-async';
+import { spawnAsync, spawnAsyncMatchStdout } from './spawn-async';
 import * as child_process from 'child_process';
 import type { SpawnMock } from '../../../__mocks__/child_process';
 
@@ -122,6 +122,35 @@ describe('spawnAsync', () => {
     await promise;
 
     expect(loggerInfoMock).toHaveBeenCalledWith(buffer.toString());
+  });
+
+  it('should resolve with the first stdout pattern match without waiting for close', async () => {
+    const { command, processKey, mockedChildProcess } = setupSpawn();
+    const pattern = /"size":\s*(\d+)/;
+
+    const promise = spawnAsyncMatchStdout(command, [], pattern);
+    const childProcess = mockedChildProcess.listOfChildProcess[processKey];
+    childProcess.stdout.emit(
+      'data',
+      Buffer.from('[{"name":"pkg","version":"1.0.0","size":2048')
+    );
+    const returnedValue = await promise;
+
+    expect(returnedValue).toBe('2048');
+    expect(childProcess.kill).toHaveBeenCalled();
+  });
+
+  it('should resolve with undefined when the command finishes without a match', async () => {
+    const { command, processKey, mockedChildProcess } = setupSpawn();
+
+    const promise = spawnAsyncMatchStdout(command, [], /"size":\s*(\d+)/);
+    const childProcess = mockedChildProcess.listOfChildProcess[processKey];
+    childProcess.stdout.emit('data', Buffer.from('no match here'));
+    childProcess.emit('close', 0);
+    const returnedValue = await promise;
+
+    expect(returnedValue).toBeUndefined();
+    expect(childProcess.kill).toHaveBeenCalled();
   });
 
   describe('Windows OS', () => {
