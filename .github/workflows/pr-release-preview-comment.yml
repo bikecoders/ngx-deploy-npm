@@ -17,39 +17,20 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - name: Get PR number from head SHA
-        id: pr-info
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const headSha = context.payload.workflow_run.head_sha;
-            console.log(`Looking up PR for head SHA: ${headSha}`);
-
-            const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              commit_sha: headSha,
-            });
-
-            if (prs.length === 0) {
-              throw new Error(`No PR found for commit ${headSha}`);
-            }
-
-            const prNumber = prs[0].number;
-            console.log(`Found PR #${prNumber}`);
-            core.setOutput('pr-number', prNumber);
-
       - name: Download release preview comment
         uses: actions/github-script@v7
         with:
           script: |
             const artifactName = 'release-preview-comment';
-            console.log(`Looking for artifact: ${artifactName}`);
+            const previewRunId = context.payload.workflow_run.id;
+            console.log(
+              `Downloading artifact from PR Release Preview run ${previewRunId} (head ${context.payload.workflow_run.head_sha})`
+            );
 
             const allArtifacts = await github.rest.actions.listWorkflowRunArtifacts({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              run_id: context.payload.workflow_run.id,
+              run_id: previewRunId,
             });
             console.log(
               'Available artifacts:',
@@ -61,7 +42,7 @@ jobs:
             );
 
             if (!matchArtifact) {
-              throw new Error(`Artifact "${artifactName}" not found!`);
+              throw new Error(`Artifact "${artifactName}" not found on run ${previewRunId}`);
             }
 
             const download = await github.rest.actions.downloadArtifact({
@@ -79,6 +60,49 @@ jobs:
 
       - name: Extract release preview comment
         run: unzip release-preview-comment.zip
+
+      - name: Resolve PR number
+        id: pr-info
+        uses: actions/github-script@v7
+        env:
+          WORKFLOW_RUN: ${{ toJson(github.event.workflow_run) }}
+        with:
+          script: |
+            const fs = require('fs');
+            const workflowRun = JSON.parse(process.env.WORKFLOW_RUN);
+
+            if (fs.existsSync('pr-number.txt')) {
+              const prNumber = fs.readFileSync('pr-number.txt', 'utf8').trim();
+              console.log(`Resolved PR #${prNumber} from artifact`);
+              core.setOutput('pr-number', prNumber);
+              return;
+            }
+
+            const linkedPrs = workflowRun.pull_requests ?? [];
+            if (linkedPrs.length > 0) {
+              const prNumber = linkedPrs[0].number;
+              console.log(`Resolved PR #${prNumber} from workflow_run.pull_requests`);
+              core.setOutput('pr-number', prNumber);
+              return;
+            }
+
+            const headSha = workflowRun.head_sha;
+            console.log(`Resolving PR from head SHA: ${headSha}`);
+            const { data: prs } =
+              await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: headSha,
+              });
+
+            const openPr = prs.find((pr) => pr.state === 'open');
+            const pr = openPr ?? prs[0];
+            if (!pr) {
+              throw new Error(`No PR found for commit ${headSha}`);
+            }
+
+            console.log(`Resolved PR #${pr.number} from commit association (${pr.state})`);
+            core.setOutput('pr-number', pr.number);
 
       - name: Find existing preview comment
         uses: peter-evans/find-comment@v4
