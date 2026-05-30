@@ -9,46 +9,56 @@ jest.mock('../../../utils', () => {
 });
 
 describe('setPackageVersion', () => {
-  let myPackageJSON: Record<string, unknown>;
-  let expectedPackage: Record<string, unknown>;
-  let version: string;
-  let dir: string;
+  function setupSetPackageVersion(
+    opts: {
+      version?: string;
+      dir?: string;
+      packageJson?: Record<string, unknown>;
+    } = {}
+  ) {
+    const {
+      version = '1.0.1-next0',
+      dir = 'some/random/dir',
+      packageJson = {
+        name: 'ngx-deploy-npm',
+        version: 'boilerPlate',
+        description: 'Publish your libraries to NPM with just one command',
+        main: 'index.js',
+      },
+    } = opts;
 
-  let valueWriten: Parameters<typeof fileUtils.writeFileAsync>[1];
+    const written = {
+      value: undefined as
+        | Parameters<typeof fileUtils.writeFileAsync>[1]
+        | undefined,
+    };
 
-  // Spies
-  beforeEach(() => {
     jest
       .spyOn(fileUtils, 'readFileAsync')
-      .mockImplementation(() => Promise.resolve(JSON.stringify(myPackageJSON)));
+      .mockImplementation(() => Promise.resolve(JSON.stringify(packageJson)));
 
     jest.spyOn(fileUtils, 'writeFileAsync').mockImplementation((_, data) => {
-      valueWriten = data;
+      written.value = data;
       return Promise.resolve();
     });
-  });
 
-  // Data
-  beforeEach(() => {
-    version = '1.0.1-next0';
-    dir = 'some/random/dir';
-
-    myPackageJSON = {
-      name: 'ngx-deploy-npm',
-      version: 'boilerPlate',
-      description: 'Publish your libraries to NPM with just one command',
-      main: 'index.js',
-    };
-
-    expectedPackage = {
-      ...myPackageJSON,
+    const expectedPackage = {
+      ...packageJson,
       version,
     };
+
+    return { dir, version, expectedPackage, written };
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('should write the version of the sent on the package.json', async () => {
+    const { dir, version, expectedPackage, written } = setupSetPackageVersion();
+
     await setPackageVersion(dir, version);
 
-    expect(valueWriten).toEqual(JSON.stringify(expectedPackage, null, 4));
+    expect(written.value).toEqual(JSON.stringify(expectedPackage, null, 4));
   });
 });

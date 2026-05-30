@@ -1,0 +1,81 @@
+---
+description: "REQUIRED when writing/editing tests: SIFERS setup functions — NEVER jest.spyOn inside it() blocks"
+globs: "**/*.spec.ts,**/*.smoke.spec.ts"
+alwaysApply: true
+---
+
+# SIFERS tests — mandatory for spec files
+
+When you **create or edit** any `*.spec.ts` / `*.smoke.spec.ts` in this repo, follow **SIFERS** (**S**imple **I**njectable **F**unctions **E**xplicitly **R**eturning **S**tate).
+
+## Hard rules (violations are bugs — fix before finishing)
+
+1. **First statement in every `it` / `test` is a setup call** — destructure everything you need from it.
+2. **NEVER put `jest.spyOn`, `jest.fn`, or mock wiring inside `it` / `test`** — only inside `setup` / `setupXxx` functions.
+3. **NEVER use `beforeEach` + outer `let` for per-test state** — call `setup(opts = {})` at the top of each test instead.
+4. **Setup MUST return every spy/mock the test asserts on** — e.g. `loggerWarnSpy`, `loggerErrorSpy`, `spawnAsync` mock handles.
+5. **If an option triggers logging, setup creates the spy** — e.g. `projectGraphError` → return `loggerErrorSpy` from setup (see `generator.spec.ts`).
+6. **Nest setups per `describe`** — inner `setupVersionCheck()` calls outer `setup()` and extends state; forward unknown options.
+7. **Only refactor tests you touch** — don't rewrite unrelated tests in the same file unless asked.
+
+## Setup template (copy this shape)
+
+```typescript
+type SetupOptions = {
+  projectGraphError?: Error;
+  checkExisting?: 'warning' | 'error';
+};
+
+function setup(opts: SetupOptions = {}) {
+  const { projectGraphError, checkExisting = undefined as 'warning' | 'error' | undefined } = opts;
+
+  jest.spyOn(spawn, 'spawnAsync').mockImplementation(() => Promise.resolve());
+
+  const loggerErrorSpy = projectGraphError
+    ? jest.spyOn(logger, 'error').mockImplementation(() => undefined)
+    : undefined;
+
+  const loggerWarnSpy =
+    checkExisting === 'warning'
+      ? jest.spyOn(logger, 'warn').mockImplementation(() => undefined)
+      : undefined;
+
+  return { tree, options, loggerErrorSpy, loggerWarnSpy };
+}
+
+it('warns when package exists', async () => {
+  const { tree, options, loggerWarnSpy } = setup({ checkExisting: 'warning' });
+
+  await runMigration(tree, options);
+
+  expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('already exists'));
+});
+```
+
+## Anti-patterns — do NOT write these
+
+```typescript
+// BAD: spy inside it()
+it('warns', async () => {
+  const loggerWarnSpy = jest.spyOn(logger, 'warn'); // ← FORBIDDEN
+  const { tree } = setup();
+});
+
+// BAD: beforeEach + mutable outer state
+let tree: Tree;
+beforeEach(() => { tree = setup().tree; });
+
+// BAD: mock helper called from it() alongside setup
+it('lists', async () => {
+  const { handler } = setupHandler();
+  mockDb([row]); // ← belongs inside setupHandler via options
+});
+```
+
+## Checklist before merging test PRs
+
+- [ ] Each test begins with a **single** setup call that returns **all** mutable collaborators the test uses.
+- [ ] No test relies on another test having run or on a previous `it` having left spies configured.
+- [ ] New scenarios add **options** to setup rather than new global hooks, when possible.
+- [ ] No `jest.spyOn()` or mock creation happens inside `it()` blocks — all spies come from setup.
+- [ ] No fragmented helper functions outside setup — all mock wiring is inside setup.

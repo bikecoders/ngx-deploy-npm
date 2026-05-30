@@ -22,3 +22,12 @@
 - The `nx-generate` skill handles generator discovery internally - don't call nx_docs just to look up generator syntax
 
 <!-- nx configuration end-->
+
+## Tests (SIFERS — mandatory)
+
+When creating or editing `*.spec.ts` / `*.smoke.spec.ts` files, follow `.cursor/rules/tests-sifers.mdc`:
+
+- Every test starts with one `setup()` call; setup returns all mocks/spies.
+- **Never** `jest.spyOn` / mock wiring inside `it()` or `test()` blocks.
+- **Never** `beforeEach` + outer `let` for per-test state.
+- Copy patterns from `engine.spec.ts`, `generator.spec.ts`, or `write-dist-folder-path-on-deploy-target-options.spec.ts`.
