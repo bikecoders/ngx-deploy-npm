@@ -68,14 +68,15 @@ export function spawnAsyncMatchStdout(
     childProcess.stdout.on('data', data => {
       searchBuffer += data.toString();
 
-      if (searchBuffer.length > bufferLimit) {
-        searchBuffer = searchBuffer.slice(-bufferLimit);
-      }
-
       const match = pattern.exec(searchBuffer);
 
       if (match?.[1]) {
         finish(match[1]);
+        return;
+      }
+
+      if (searchBuffer.length > bufferLimit) {
+        searchBuffer = searchBuffer.slice(-bufferLimit);
       }
     });
     childProcess.stderr.on('data', data => {

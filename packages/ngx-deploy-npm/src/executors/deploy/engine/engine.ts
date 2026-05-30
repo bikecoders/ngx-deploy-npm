@@ -86,10 +86,6 @@ function isCheckExistingEnabled(
 }
 
 function shouldRunExistingCheck(options: DeployExecutorOptions): boolean {
-  if (!isCheckExistingEnabled(options.checkExisting)) {
-    return false;
-  }
-
   if (options.checkTag) {
     const publishTag = options.tag ?? 'latest';
     return publishTag !== 'latest';
@@ -167,15 +163,15 @@ function logDryRunFooter(options: DeployExecutorOptions): void {
 }
 
 function formatTarballSize(bytes: number): string {
-  if (bytes < 1024) {
+  if (bytes < 1000) {
     return `${bytes} B`;
   }
 
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1000 * 1000) {
+    return `${(bytes / 1000).toFixed(1)} kB`;
   }
 
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1000 * 1000)).toFixed(1)} MB`;
 }
 
 async function getTarballSize(
@@ -205,12 +201,14 @@ async function logPublishSummary(
   const tarballLabel =
     tarballSize === undefined ? 'unknown' : formatTarballSize(tarballSize);
 
+  logger.info('--------------------------------');
   logger.info('📦 Published package summary:');
   logger.info(`   name:     ${packageInfo.name}`);
   logger.info(`   version:  ${packageInfo.version}`);
   logger.info(`   tag:      ${tag}`);
   logger.info(`   registry: ${registry}`);
   logger.info(`   tarball:  ${tarballLabel}`);
+  logger.info('--------------------------------');
 }
 
 export async function run(

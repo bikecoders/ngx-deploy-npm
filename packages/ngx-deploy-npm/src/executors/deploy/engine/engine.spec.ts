@@ -34,6 +34,7 @@ describe('engine', () => {
     ) => Promise<string | undefined>;
     mockPackageJson?: { name: string; version: string };
     packSize?: number;
+    logError?: boolean;
     options?: Omit<DeployExecutorOptions, 'distFolderPath'>;
   };
 
@@ -56,6 +57,7 @@ describe('engine', () => {
     },
     mockPackageJson = defaultMockPackageJson,
     packSize,
+    logError = false,
   }: SetupOptions = {}) => {
     const fullOptions: DeployExecutorOptions = {
       ...options,
@@ -74,10 +76,14 @@ describe('engine', () => {
       .mockImplementation(() =>
         Promise.resolve(JSON.stringify(mockPackageJson))
       );
+    const loggerErrorSpy = logError
+      ? jest.spyOn(logger, 'error').mockImplementation(() => undefined)
+      : undefined;
 
     return {
       absoluteDistFolderPath: `${rootProject}/${distFolderPath}`,
       mockPackageJson,
+      loggerErrorSpy,
       options: fullOptions,
     };
   };
@@ -119,13 +125,16 @@ describe('engine', () => {
   });
 
   it('should indicate that an error occurred when there is an error publishing the package', async () => {
-    const { absoluteDistFolderPath, options } = setup({
+    const { absoluteDistFolderPath, options, loggerErrorSpy } = setup({
+      logError: true,
       spawnAsyncMock: () => Promise.reject(new Error('custom error')),
     });
 
     await expect(() =>
       engine.run(absoluteDistFolderPath, options)
     ).rejects.toThrow();
+
+    expect(loggerErrorSpy).toHaveBeenCalledWith('❌ An error occurred!');
   });
 
   describe('Package.json Feature', () => {
@@ -590,7 +599,7 @@ describe('engine', () => {
       );
       expect(loggerInfoSpy).toHaveBeenCalledWith('   tag:      next');
       expect(loggerInfoSpy).toHaveBeenCalledWith(`   registry: ${registry}`);
-      expect(loggerInfoSpy).toHaveBeenCalledWith('   tarball:  2.0 KB');
+      expect(loggerInfoSpy).toHaveBeenCalledWith('   tarball:  2.0 kB');
     });
 
     it('should use default tag and registry in publish summary when not provided', async () => {
@@ -606,6 +615,50 @@ describe('engine', () => {
         '   registry: https://registry.npmjs.org/'
       );
       expect(loggerInfoSpy).toHaveBeenCalledWith('   tarball:  512 B');
+    });
+
+    it('should format tarball size in megabytes for large packages', async () => {
+      const { absoluteDistFolderPath, options, loggerInfoSpy } =
+        setupSuccessfulPublish({
+          packSize: 2_000_000,
+        });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(loggerInfoSpy).toHaveBeenCalledWith('   tarball:  2.0 MB');
+    });
+
+    it('should format tarball size using npm decimal kB units', async () => {
+      const { absoluteDistFolderPath, options, loggerInfoSpy } =
+        setupSuccessfulPublish({
+          packSize: 400_122,
+        });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(loggerInfoSpy).toHaveBeenCalledWith('   tarball:  400.1 kB');
+    });
+
+    it('should log unknown tarball size when pack command fails', async () => {
+      const { absoluteDistFolderPath, options, loggerInfoSpy } =
+        setupSuccessfulPublish({
+          spawnAsyncMatchStdoutMock: () => Promise.reject(1),
+        });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(loggerInfoSpy).toHaveBeenCalledWith('   tarball:  unknown');
+    });
+
+    it('should log unknown tarball size when pack command returns no match', async () => {
+      const { absoluteDistFolderPath, options, loggerInfoSpy } =
+        setupSuccessfulPublish({
+          spawnAsyncMatchStdoutMock: () => Promise.resolve(undefined),
+        });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(loggerInfoSpy).toHaveBeenCalledWith('   tarball:  unknown');
     });
 
     it('should not log publish summary when publish is skipped', async () => {
