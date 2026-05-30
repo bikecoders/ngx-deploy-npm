@@ -30,6 +30,81 @@ export type RemovedDeployExecutorOptions = {
 export type DeprecatedDeployExecutorOptions = DeployExecutorOptions &
   RemovedDeployExecutorOptions;
 
+function targetRequiresMigrationCreationDependsOn(
+  target: TargetConfiguration<DeprecatedDeployExecutorOptions>
+) {
+  return (
+    target.executor === 'ngx-deploy-npm:deploy' && // has the right executor
+    target.options?.noBuild !== true // the target will build the library
+  );
+}
+
+function targetRequiresMigration(
+  target: TargetConfiguration<DeprecatedDeployExecutorOptions>
+) {
+  return (
+    target.executor === 'ngx-deploy-npm:deploy' && // has the right executor
+    (target.options?.noBuild !== undefined || // the target will build the library
+      target?.options?.buildTarget !== undefined) // the target has the buildTarget option
+  );
+}
+
+function createDependsOn(projectKey: string, project: ProjectConfiguration) {
+  const deployExecutors: [
+    string,
+    TargetConfiguration<DeprecatedDeployExecutorOptions>
+  ][] = Object.entries(project.targets ?? {}).filter(
+    ([targetName, targetConfig]) =>
+      targetRequiresMigrationCreationDependsOn(targetConfig)
+  );
+
+  deployExecutors.forEach(([targetName, targetConfig]) => {
+    // store the old buildTarget value
+    const buildTarget = targetConfig.options?.buildTarget;
+
+    // Create targets in case that they doesn't already exists
+    if (!project.targets) {
+      project.targets = {};
+    }
+
+    // If our executor was building the library, it needs to depend on the build target
+    let newDependsOn = 'build';
+    if (typeof buildTarget === 'string') {
+      const newPreDeployTargetName = `pre-${targetName}-build-${buildTarget}`;
+      newDependsOn = newPreDeployTargetName;
+
+      project.targets[newPreDeployTargetName] = {
+        executor: 'nx:run-commands',
+        options: {
+          command: `nx run ${projectKey}:build:${buildTarget}`,
+        },
+      };
+    }
+
+    const dependsOn = project.targets[targetName].dependsOn;
+    if (dependsOn === undefined) {
+      project.targets[targetName].dependsOn = [];
+    }
+
+    project.targets[targetName].dependsOn?.push(newDependsOn);
+  });
+}
+
+function removeBuildTargetAndNoBuildOptions(project: ProjectConfiguration) {
+  const deployExecutors: [
+    string,
+    TargetConfiguration<DeprecatedDeployExecutorOptions>
+  ][] = Object.entries(project.targets ?? {}).filter(([_, targetConfig]) =>
+    targetRequiresMigration(targetConfig)
+  );
+
+  deployExecutors.forEach(([_, targetConfig]) => {
+    // Remove option build target
+    delete targetConfig.options?.buildTarget;
+    delete targetConfig.options?.noBuild;
+  });
+}
+
 export default async function update(host: Tree) {
   dependsOnMigration(host);
   removeDeprecatedOptionsMigration(host);
@@ -53,56 +128,6 @@ function dependsOnMigration(host: Tree) {
     createDependsOn(projectKey, project);
     updateProjectConfiguration(host, projectKey, project);
   });
-
-  function targetRequiresMigrationCreationDependsOn(
-    target: TargetConfiguration<DeprecatedDeployExecutorOptions>
-  ) {
-    return (
-      target.executor === 'ngx-deploy-npm:deploy' && // has the right executor
-      target.options?.noBuild !== true // the target will build the library
-    );
-  }
-
-  function createDependsOn(projectKey: string, project: ProjectConfiguration) {
-    const deployExecutors: [
-      string,
-      TargetConfiguration<DeprecatedDeployExecutorOptions>
-    ][] = Object.entries(project.targets ?? {}).filter(
-      ([targetName, targetConfig]) =>
-        targetRequiresMigrationCreationDependsOn(targetConfig)
-    );
-
-    deployExecutors.forEach(([targetName, targetConfig]) => {
-      // store the old buildTarget value
-      const buildTarget = targetConfig.options?.buildTarget;
-
-      // Create targets in case that they doesn't already exists
-      if (!project.targets) {
-        project.targets = {};
-      }
-
-      // If our executor was building the library, it needs to depend on the build target
-      let newDependsOn = 'build';
-      if (typeof buildTarget === 'string') {
-        const newPreDeployTargetName = `pre-${targetName}-build-${buildTarget}`;
-        newDependsOn = newPreDeployTargetName;
-
-        project.targets[newPreDeployTargetName] = {
-          executor: 'nx:run-commands',
-          options: {
-            command: `nx run ${projectKey}:build:${buildTarget}`,
-          },
-        };
-      }
-
-      const dependsOn = project.targets[targetName].dependsOn;
-      if (dependsOn === undefined) {
-        project.targets[targetName].dependsOn = [];
-      }
-
-      project.targets[targetName].dependsOn?.push(newDependsOn);
-    });
-  }
 }
 
 async function removeDeprecatedOptionsMigration(host: Tree) {
@@ -121,29 +146,4 @@ async function removeDeprecatedOptionsMigration(host: Tree) {
     removeBuildTargetAndNoBuildOptions(project);
     updateProjectConfiguration(host, projectKey, project);
   });
-
-  function targetRequiresMigration(
-    target: TargetConfiguration<DeprecatedDeployExecutorOptions>
-  ) {
-    return (
-      target.executor === 'ngx-deploy-npm:deploy' && // has the right executor
-      (target.options?.noBuild !== undefined || // the target will build the library
-        target?.options?.buildTarget !== undefined) // the target has the buildTarget option
-    );
-  }
-
-  function removeBuildTargetAndNoBuildOptions(project: ProjectConfiguration) {
-    const deployExecutors: [
-      string,
-      TargetConfiguration<DeprecatedDeployExecutorOptions>
-    ][] = Object.entries(project.targets ?? {}).filter(([_, targetConfig]) =>
-      targetRequiresMigration(targetConfig)
-    );
-
-    deployExecutors.forEach(([_, targetConfig]) => {
-      // Remove option build target
-      delete targetConfig.options?.buildTarget;
-      delete targetConfig.options?.noBuild;
-    });
-  }
 }

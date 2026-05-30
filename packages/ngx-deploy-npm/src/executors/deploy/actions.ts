@@ -1,7 +1,7 @@
 import { ExecutorContext } from '@nx/devkit';
 
 import { DeployExecutorOptions } from './schema';
-import * as path from 'path';
+import * as path from 'node:path';
 
 export default async function deploy(
   engine: {

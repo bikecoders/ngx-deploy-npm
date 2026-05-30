@@ -1,9 +1,12 @@
 import { logger } from '@nx/devkit';
 import * as fileUtils from '../../../utils';
-import * as path from 'path';
+import * as path from 'node:path';
 
 import { setPackageVersion, NpmPublishOptions, spawnAsync } from '../utils';
 import { DeployExecutorOptions } from '../schema';
+
+type PackageInfo = { name: string; version: string };
+type ExistingPackagePolicy = 'error' | 'warning';
 
 async function checkIfPackageExists(
   packageName: string,
@@ -22,9 +25,7 @@ async function checkIfPackageExists(
   }
 }
 
-async function getPackageInfo(
-  distFolderPath: string
-): Promise<{ name: string; version: string }> {
+async function getPackageInfo(distFolderPath: string): Promise<PackageInfo> {
   const packageContent = await fileUtils.readFileAsync(
     path.join(distFolderPath, 'package.json'),
     { encoding: 'utf8' }
@@ -36,65 +37,115 @@ async function getPackageInfo(
   };
 }
 
+function formatAlreadyExistsMessage(
+  packageInfo: PackageInfo,
+  registry?: string
+): string {
+  const registrySuffix = registry ? ` ${registry}` : '';
+  return `Package ${packageInfo.name}@${packageInfo.version} already exists in registry${registrySuffix}.`;
+}
+
+function formatAlreadyExistsSkipMessage(packageInfo: PackageInfo): string {
+  return `Package ${packageInfo.name}@${packageInfo.version} already exists in registry. Skipping  publish.`;
+}
+
+const whenPackageExists: Record<
+  ExistingPackagePolicy,
+  (packageInfo: PackageInfo, registry?: string) => void
+> = {
+  error: (packageInfo, registry) => {
+    throw new Error(formatAlreadyExistsMessage(packageInfo, registry));
+  },
+  warning: packageInfo => {
+    logger.warn(formatAlreadyExistsSkipMessage(packageInfo));
+  },
+};
+
+function isCheckExistingEnabled(
+  checkExisting: DeployExecutorOptions['checkExisting']
+): checkExisting is ExistingPackagePolicy {
+  return !!checkExisting && ['error', 'warning'].includes(checkExisting);
+}
+
+function logDryRunBanner(options: DeployExecutorOptions): void {
+  if (options.dryRun) {
+    logger.info('Dry-run: The package is not going to be published');
+  }
+}
+
+async function applyPackageVersionIfNeeded(
+  distFolderPath: string,
+  options: DeployExecutorOptions
+): Promise<void> {
+  /*
+  Modifying the dist when the user is dry-run mode,
+  thanks to the Nx Cache could lead to leading to publishing and unexpected package version
+  when the option is removed
+  */
+  if (options.packageVersion && !options.dryRun) {
+    await setPackageVersion(distFolderPath, options.packageVersion);
+  }
+}
+
+async function ensurePublishAllowed(
+  distFolderPath: string,
+  options: DeployExecutorOptions,
+  npmOptions: NpmPublishOptions
+): Promise<boolean> {
+  if (!isCheckExistingEnabled(options.checkExisting)) {
+    return true;
+  }
+
+  const packageInfo = await getPackageInfo(distFolderPath);
+  const exists = await checkIfPackageExists(
+    packageInfo.name,
+    packageInfo.version,
+    npmOptions
+  );
+
+  if (!exists) {
+    return true;
+  }
+
+  whenPackageExists[options.checkExisting](packageInfo, options.registry);
+
+  return false;
+}
+
+async function publishPackage(
+  distFolderPath: string,
+  npmOptions: NpmPublishOptions
+): Promise<void> {
+  await spawnAsync('npm', [
+    'publish',
+    distFolderPath,
+    ...getOptionsStringArr(npmOptions),
+  ]);
+}
+
+function logDryRunFooter(options: DeployExecutorOptions): void {
+  if (options.dryRun) {
+    logger.info('The options are:');
+    logger.info(JSON.stringify(options, null, 1));
+  }
+}
+
 export async function run(
   distFolderPath: string,
   options: DeployExecutorOptions
 ) {
   try {
-    if (options.dryRun) {
-      logger.info('Dry-run: The package is not going to be published');
-    }
-
-    /*
-    Modifying the dist when the user is dry-run mode,
-    thanks to the Nx Cache could lead to leading to publishing and unexpected package version
-    when the option is removed
-    */
-    if (options.packageVersion && !options.dryRun) {
-      await setPackageVersion(distFolderPath, options.packageVersion);
-    }
+    logDryRunBanner(options);
+    await applyPackageVersionIfNeeded(distFolderPath, options);
 
     const npmOptions = extractOnlyNPMOptions(options);
 
-    // Only check for existing package if explicitly enabled
-    if (
-      options.checkExisting &&
-      ['error', 'warning'].includes(options.checkExisting)
-    ) {
-      const packageInfo = await getPackageInfo(distFolderPath);
-      const exists = await checkIfPackageExists(
-        packageInfo.name,
-        packageInfo.version,
-        npmOptions
-      );
-
-      if (exists) {
-        if (options.checkExisting === 'error') {
-          const message = `Package ${packageInfo.name}@${
-            packageInfo.version
-          } already exists in registry${
-            options.registry ? ` ${options.registry}` : ''
-          }.`;
-          throw new Error(message);
-        } else {
-          logger.warn(
-            `Package ${packageInfo.name}@${packageInfo.version} already exists in registry. Skipping  publish.`
-          );
-          return;
-        }
-      }
+    if (!(await ensurePublishAllowed(distFolderPath, options, npmOptions))) {
+      return;
     }
 
-    await spawnAsync('npm', [
-      'publish',
-      distFolderPath,
-      ...getOptionsStringArr(npmOptions),
-    ]);
-
-    if (options.dryRun) {
-      logger.info('The options are:');
-      logger.info(JSON.stringify(options, null, 1));
-    }
+    await publishPackage(distFolderPath, npmOptions);
+    logDryRunFooter(options);
 
     logger.info(
       '🚀 Successfully published via ngx-deploy-npm! Have a nice day!'
@@ -126,6 +177,10 @@ function extractOnlyNPMOptions({
   };
 }
 
+function toKebabCase(str: string) {
+  return str.replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2').toLowerCase();
+}
+
 function getOptionsStringArr(options: NpmPublishOptions): string[] {
   return (
     Object.keys(options)
@@ -142,8 +197,4 @@ function getOptionsStringArr(options: NpmPublishOptions): string[] {
         cmdOptionValue.value.toString(),
       ])
   );
-
-  function toKebabCase(str: string) {
-    return str.replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2').toLowerCase();
-  }
 }

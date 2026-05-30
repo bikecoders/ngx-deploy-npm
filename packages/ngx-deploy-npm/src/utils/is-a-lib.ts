@@ -1,6 +1,6 @@
 import { ProjectConfiguration, readJson, Tree } from '@nx/devkit';
 import { fileExists } from './file-utils';
-import * as path from 'path';
+import * as path from 'node:path';
 
 export const isProjectAPublishableLib = async (
   tree: Tree,
