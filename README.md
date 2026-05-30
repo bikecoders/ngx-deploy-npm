@@ -52,6 +52,11 @@
 
 - [🚀 Quick Start (local development)](#quick-start-local-development)
 - [🚀 Continuous Delivery](#continuous-delivery)
+  - [GitHub Actions (OIDC trusted publishing)](#github-actions-oidc-trusted-publishing)
+  - [GitHub Actions with `@jscutlery/semver`](#github-actions-with-jscutlerysemver)
+  - [GitHub Actions with an NPM token](#github-actions-with-an-npm-token)
+  - [Troubleshooting GitHub Actions auth](#troubleshooting-github-actions-auth)
+  - [CircleCI (NPM token)](#circleci)
 - [📦 Options](#options)
   - [install](#install)
     - [`--dist-folder-path`](#--dist-folder-path-install)
@@ -77,12 +82,14 @@
 
 ## 🚀 Quick Start (local development) <a name="quick-start-local-development"></a>
 
-1. Add `ngx-deploy-npm` to your project. It will configure all your publishable libraries present in the project:
+1. Add `ngx-deploy-npm` and configure **one library at a time** with `--project` and `--dist-folder-path`:
 
    ```bash
    npm install --save-dev ngx-deploy-npm
-   nx generate ngx-deploy-npm:install
+   npm exec nx generate ngx-deploy-npm:install --project=your-library --dist-folder-path=dist/libs/your-library
    ```
+
+   Repeat the generator for each library you want to publish. There is no bulk `--projects` install.
 
 2. Deploy your library to NPM with all default settings.
 
@@ -94,12 +101,157 @@
 
 ## 🚀 Continuous Delivery <a name="continuous-delivery"></a>
 
-Independently of the CI/CD you are using, you need an NPM token. To do so, you have two methods.
+You can publish from CI in two ways:
 
-- Via [NPM web page](https://docs.npmjs.com/creating-and-viewing-authentication-tokens)
-- Using [`npm token create`](https://docs.npmjs.com/cli/token.html)
+- **OIDC trusted publishing (recommended for GitHub Actions)** — short-lived credentials from your workflow; no long-lived `NPM_TOKEN`. See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).
+- **NPM token** — classic automation token written to `.npmrc`. Create one via the [NPM web page](https://docs.npmjs.com/creating-and-viewing-authentication-tokens) or [`npm token create`](https://docs.npmjs.com/cli/token.html).
 
-### [CircleCI](http://circleci.com) <!-- omit in toc -->
+### GitHub Actions (OIDC trusted publishing) <a name="github-actions-oidc-trusted-publishing"></a> <!-- omit in toc -->
+
+1. **Configure a trusted publisher on npmjs.com**
+
+   - Open your package on npm → **Settings** → **Trusted publishing**.
+   - Choose **GitHub Actions** and set the **Organization/user**, **Repository**, and **Workflow filename** (e.g. `publish.yml` — filename only, including `.yml`).
+   - If you use a GitHub **environment** (e.g. `production`), enter the same name in npm.
+   - Ensure the `repository` field in the published `package.json` matches your GitHub repo URL.
+
+2. **Grant OIDC permissions in the workflow**
+
+   ```yaml
+   permissions:
+     id-token: write # required for npm OIDC
+     contents: read
+   ```
+
+3. **Build, then deploy with `ngx-deploy-npm`**
+
+   Trusted publishing requires **npm CLI v11.5.1+**. The executor runs `npm publish` for you — no `NPM_TOKEN` is needed when OIDC is configured.
+
+   ```yaml
+   # .github/workflows/publish.yml
+   name: Publish
+
+   on:
+     push:
+       branches:
+         - main
+
+   jobs:
+     publish:
+       runs-on: ubuntu-latest
+       environment: production # optional; must match npm trusted publisher if set
+       permissions:
+         id-token: write
+         contents: read
+       steps:
+         - uses: actions/checkout@v6
+         - uses: actions/setup-node@v6
+           with:
+             node-version: '22'
+             # Do not set registry-url here unless you also provide NODE_AUTH_TOKEN
+             # for private dependency installs — an empty token blocks OIDC publish.
+         - run: npm ci
+         - run: npx nx build your-library
+         - run: npx nx deploy your-library
+   ```
+
+   When publishing with OIDC from a **public** repository, npm adds [provenance](https://docs.npmjs.com/generating-provenance-statements) attestations automatically. To disable them, set `NPM_CONFIG_PROVENANCE=false` on the deploy step.
+
+4. **Scoped packages, custom registries, and `.npmrc`**
+
+   - For scoped packages on the **public registry**, set `"access": "public"` in the deploy target or pass `--access=public`.
+   - For a custom registry, use the deploy [`--registry`](#--registry) option or set it in the project's `deploy` target options.
+   - Add a repo-level `.npmrc` when you need registry defaults, for example:
+
+     ```ini
+     @my-org:registry=https://registry.npmjs.org/
+     ```
+
+     Or for GitHub Packages:
+
+     ```ini
+     @my-org:registry=https://npm.pkg.github.com
+     ```
+
+   OIDC trusted publishing applies to `npm publish` on the registry you configure; private dependency installs may still need a read-only `NODE_AUTH_TOKEN` on `npm ci` (see [npm docs](https://docs.npmjs.com/trusted-publishers/#handling-private-dependencies)).
+
+5. Enjoy your just-released package 🎉📦
+
+This repo publishes with OIDC in [`.github/workflows/publishment.yml`](.github/workflows/publishment.yml) — no `NPM_TOKEN` secret.
+
+### GitHub Actions with `@jscutlery/semver` <a name="github-actions-with-jscutlerysemver"></a> <!-- omit in toc -->
+
+[`@jscutlery/semver`](https://github.com/jscutlery/semver) bumps the version from your commits and can chain **build** and **deploy** via `postTargets`. Configure a `version` target on your library (see [this repo's `project.json`](https://github.com/bikecoders/ngx-deploy-npm/blob/main/packages/ngx-deploy-npm/project.json)):
+
+```json
+"version": {
+  "executor": "@jscutlery/semver:version",
+  "options": {
+    "postTargets": ["build", "deploy"]
+  }
+}
+```
+
+In CI, a single command bumps, builds, and publishes:
+
+```yaml
+permissions:
+  id-token: write # omit if using NPM_TOKEN instead (see below)
+  contents: read
+
+steps:
+  - uses: actions/checkout@v6
+    with:
+      fetch-depth: 0 # required by semver to read commit history
+  - uses: actions/setup-node@v6
+    with:
+      node-version: '22'
+  - run: npm ci
+  - run: npx nx version your-library
+```
+
+### GitHub Actions with an NPM token <a name="github-actions-with-an-npm-token"></a> <!-- omit in toc -->
+
+If you are not using [OIDC trusted publishing](#github-actions-oidc-trusted-publishing) yet, store an automation token as `NPM_TOKEN` and pass it through `setup-node`:
+
+```yaml
+# .github/workflows/publish.yml
+name: Publish
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npx nx build your-library
+      - run: npx nx deploy your-library
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+```
+
+With semver, pass `NODE_AUTH_TOKEN` on the `npx nx version your-library` step instead of separate build/deploy steps.
+
+### Troubleshooting GitHub Actions auth <a name="troubleshooting-github-actions-auth"></a> <!-- omit in toc -->
+
+| Symptom                                 | Likely cause                                                                                                               | Fix                                                                                                    |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `ENEEDAUTH` with OIDC configured on npm | `setup-node` wrote `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}` but `NODE_AUTH_TOKEN` is empty, so npm skips OIDC | Omit `registry-url` from `setup-node` on the publish job, or supply a read-only token only on `npm ci` |
+| OIDC publish rejected                   | Trusted publisher workflow filename, repo, or environment does not match npm settings                                      | Match npm **Trusted publishing** fields exactly (case-sensitive `.yml` filename)                       |
+| OIDC publish rejected from a fork       | `repository` in `package.json` still points at the upstream repo                                                           | Align `repository.url` with the repo that runs the workflow                                            |
+
+### [CircleCI](http://circleci.com) <a name="circleci"></a> <!-- omit in toc -->
 
 1. Set the env variable
    - On your project setting the env variable. Let's call it `NPM_TOKEN`
@@ -256,7 +408,7 @@ For testing: Run through without making any changes. Execute with `--dry-run`, a
 ## 📁 Configuration File <a name="configuration-file"></a>
 
 To avoid all these command-line cmd options, you can write down your
-configuration in the `workspace.json` file in the `options` attribute
+configuration in the `project.json` file in the `options` attribute
 of your deploy project's executor.
 Just change the option to lower camel case.
 
@@ -297,9 +449,9 @@ For more information go to semver's [documentation](https://github.com/jscutlery
 
 We use `@jscutlery/semver` here on `ngx-deploy-npm` to generate the package's next version, and we use `ngx-deploy-npm` to publish that version to NPM. Yes, it uses itself, take a look by yourself [ngx-deploy-npm/project.json](https://github.com/bikecoders/ngx-deploy-npm/blob/main/packages/ngx-deploy-npm/project.json#L55-L67)
 
-### Only publishable libraries are being configured <!-- omit in toc -->
+### One library per install run <!-- omit in toc -->
 
-Only publishable libraries are going to be configured.
+The install generator configures a single project per invocation (`--project` + `--dist-folder-path`). Run it again for each library you publish.
 
 ## 🎉 Do you Want to Contribute? <a name="do-you-want-to-contribute"></a>
 
