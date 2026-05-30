@@ -19,6 +19,7 @@ function spawnMock(command: string) {
   const childProcess = {
     stdout: createReadable(),
     stderr: createReadable(),
+    kill: jest.fn(),
     ...createReadable(),
   };
 
