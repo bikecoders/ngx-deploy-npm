@@ -10,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
@@ -34,23 +33,13 @@ jobs:
           COMMITLINT_OK: ${{ steps.commitlint.outputs.ok == 'true' && '1' || '0' }}
         run: npx ts-node --transpile-only -O '{"module":"commonjs"}' tools/ci/pr-release-preview.ts
 
-      - name: Find existing preview comment
+      - name: Upload release preview comment
         if: always() && steps.preview.outcome != 'skipped'
-        uses: peter-evans/find-comment@v4
-        id: find-comment
+        uses: actions/upload-artifact@v7
         with:
-          issue-number: ${{ github.event.pull_request.number }}
-          comment-author: github-actions[bot]
-          body-includes: ngx-deploy-npm-release-preview
-
-      - name: Create or update preview comment
-        if: always() && steps.preview.outcome != 'skipped'
-        uses: peter-evans/create-or-update-comment@v5
-        with:
-          comment-id: ${{ steps.find-comment.outputs.comment-id }}
-          issue-number: ${{ github.event.pull_request.number }}
-          edit-mode: replace
-          body-path: comment.md
+          name: release-preview-comment
+          path: comment.md
+          retention-days: 1
 
       - name: Enforce valid PR title
         if: steps.commitlint.outputs.ok != 'true'
