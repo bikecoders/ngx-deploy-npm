@@ -39,8 +39,13 @@
     },
     "checkExisting": {
       "type": "string",
-      "description": "How to handle existing package versions: 'warning' to continue with a warning, 'error' to abort publishing",
-      "enum": ["warning", "error"]
+      "description": "How to handle existing package versions: 'warning' to skip publishing with a warning, 'error' to abort publishing, 'skip' to skip publishing silently",
+      "enum": ["warning", "error", "skip"]
+    },
+    "checkTag": {
+      "type": "boolean",
+      "description": "When true, only run the checkExisting duplicate version check when publishing to a non-latest tag",
+      "default": false
     }
   },
   "required": ["distFolderPath"]

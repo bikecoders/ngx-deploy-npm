@@ -64,6 +64,7 @@
     - [`--access`](#--access-install)
   - [deploy](#deploy)
     - [`--check-existing`](#--check-existing)
+    - [`--check-tag`](#--check-tag)
     - [`--package-version`](#--package-version)
     - [`--tag`](#--tag)
     - [`--access`](#--access)
@@ -337,10 +338,22 @@ The path must relative to project's root.
 - Example:
   - `nx deploy --check-existing=warning`
   - `nx deploy --check-existing=error`
+  - `nx deploy --check-existing=skip`
 
 Check if the package version already exists before publishing.
 If it exists and `--check-existing=warning`, it will skip the publishing and log a warning.
 If it exists and `--check-existing=error`, it will throw an error.
+If it exists and `--check-existing=skip`, it will skip the publishing silently (useful in CI).
+
+#### `--check-tag`
+
+- **optional**
+- Default: `false` (boolean)
+- Example:
+  - `nx deploy --check-existing=warning --check-tag`
+
+When set, the duplicate version check only runs when publishing to a non-`latest` tag.
+Publishing with the default `latest` tag (or without `--tag`) skips the check even if `--check-existing` is set.
 
 #### `--package-version`
 
