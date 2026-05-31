@@ -182,30 +182,23 @@ This repo publishes with OIDC in [`.github/workflows/publishment.yml`](.github/w
 
 ### GitHub Actions with `@jscutlery/semver` <a name="github-actions-with-jscutlerysemver"></a> <!-- omit in toc -->
 
-[`@jscutlery/semver`](https://github.com/jscutlery/semver) bumps the version from your commits and can chain **build**, **deploy**, and **GitHub releases** via `postTargets`. Configure a `version` target on your library (see [this repo's `project.json`](https://github.com/bikecoders/ngx-deploy-npm/blob/main/packages/ngx-deploy-npm/project.json)):
+[`@jscutlery/semver`](https://github.com/jscutlery/semver) bumps the version from your commits and can chain **build** and **deploy** via `postTargets`. Configure a `version` target on your library (see [this repo's `project.json`](https://github.com/bikecoders/ngx-deploy-npm/blob/main/packages/ngx-deploy-npm/project.json)):
 
 ```json
-"github": {
-  "executor": "@jscutlery/semver:github",
-  "options": {
-    "tag": "{tag}",
-    "notes": "{notes}"
-  }
-},
 "version": {
   "executor": "@jscutlery/semver:version",
   "options": {
-    "postTargets": ["build", "deploy", "github"]
+    "postTargets": ["build", "deploy"]
   }
 }
 ```
 
-In CI, a single command bumps, builds, publishes to npm, and creates a GitHub release:
+In CI, a single command bumps, builds, and publishes:
 
 ```yaml
 permissions:
   id-token: write # omit if using NPM_TOKEN instead (see below)
-  contents: write # required for @jscutlery/semver:github
+  contents: read
 
 steps:
   - uses: actions/checkout@v6
@@ -216,8 +209,6 @@ steps:
       node-version: '22'
   - run: npm ci
   - run: npx nx version your-library
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 ### GitHub Actions with an NPM token <a name="github-actions-with-an-npm-token"></a> <!-- omit in toc -->
@@ -469,7 +460,7 @@ We strongly recommend using [`@jscutlery/semver`](https://github.com/jscutlery/s
 
 For more information go to semver's [documentation](https://github.com/jscutlery/semver#triggering-executors-post-release)
 
-We use `@jscutlery/semver` here on `ngx-deploy-npm` to generate the package's next version, create a [GitHub release](https://github.com/bikecoders/ngx-deploy-npm/releases), and publish that version to npm with `ngx-deploy-npm`. Yes, it uses itself — see [ngx-deploy-npm/project.json](https://github.com/bikecoders/ngx-deploy-npm/blob/main/packages/ngx-deploy-npm/project.json).
+We use `@jscutlery/semver` here on `ngx-deploy-npm` to generate the package's next version, and we use `ngx-deploy-npm` to publish that version to NPM. Yes, it uses itself, take a look by yourself [ngx-deploy-npm/project.json](https://github.com/bikecoders/ngx-deploy-npm/blob/main/packages/ngx-deploy-npm/project.json#L55-L67)
 
 ### One library per install run <!-- omit in toc -->
 
