@@ -2,6 +2,19 @@
 
 This file was generated using [@jscutlery/semver](https://github.com/jscutlery/semver).
 
+## [9.2.0](https://github.com/bikecoders/ngx-deploy-npm/compare/ngx-deploy-npm-9.1.0...ngx-deploy-npm-9.2.0) (2026-05-31)
+
+### Features
+
+- **ngx-deploy-npm:** extend checkExisting with skip mode and checkTag ([#749](https://github.com/bikecoders/ngx-deploy-npm/issues/749)) ([1250a91](https://github.com/bikecoders/ngx-deploy-npm/commit/1250a9189f46e62e56b03cde76522663c9918467))
+- **ngx-deploy-npm:** forward npm publish passthrough flags ([#751](https://github.com/bikecoders/ngx-deploy-npm/issues/751)) ([371751b](https://github.com/bikecoders/ngx-deploy-npm/commit/371751b0f41fac6acb6597d6860ae4a88f86aecc))
+- **ngx-deploy-npm:** log post-publish summary with streaming tarball size ([#750](https://github.com/bikecoders/ngx-deploy-npm/issues/750)) ([dbfe288](https://github.com/bikecoders/ngx-deploy-npm/commit/dbfe288a69f52f3749a6d80d4c54ddc87ea8afb0)), closes [#749](https://github.com/bikecoders/ngx-deploy-npm/issues/749)
+
+### Bug Fixes
+
+- **ngx-deploy-npm:** apply packageVersion transiently during dry-run ([#752](https://github.com/bikecoders/ngx-deploy-npm/issues/752)) ([cf7013f](https://github.com/bikecoders/ngx-deploy-npm/commit/cf7013f6311c1cbe3ab81dfe08b366ac323265df))
+- **ngx-deploy-npm:** resolve open SonarCloud static analysis issues ([#746](https://github.com/bikecoders/ngx-deploy-npm/issues/746)) ([599ac29](https://github.com/bikecoders/ngx-deploy-npm/commit/599ac2971841cdec6fd720428ed2ae5546492ed5))
+
 ## [9.1.0](https://github.com/bikecoders/ngx-deploy-npm/compare/ngx-deploy-npm-9.0.0...ngx-deploy-npm-9.1.0) (2026-05-21)
 
 ### Features
