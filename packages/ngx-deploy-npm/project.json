@@ -90,7 +90,9 @@
     "version": {
       "executor": "@jscutlery/semver:version",
       "options": {
-        "postTargets": ["build", "deploy"]
+        "push": true,
+        "noVerify": true,
+        "postTargets": ["build", "deploy", "github"]
       }
     }
   }
