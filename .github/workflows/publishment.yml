@@ -63,8 +63,6 @@ jobs:
       # publisher on npmjs.com for workflow publishment.yml (see contributors doc).
       - name: Version and Publishment
         run: npx nx version ngx-deploy-npm
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Tag last-release
         run: git tag --force last-release
@@ -76,3 +74,8 @@ jobs:
           branch: ${{ github.ref }}
           force: true
           tags: true
+
+      - name: Create GitHub Release
+        run: npx nx github ngx-deploy-npm
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
