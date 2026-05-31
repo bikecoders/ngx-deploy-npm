@@ -17,39 +17,22 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - name: Get PR number from head SHA
-        id: pr-info
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const headSha = context.payload.workflow_run.head_sha;
-            console.log(`Looking up PR for head SHA: ${headSha}`);
-
-            const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              commit_sha: headSha,
-            });
-
-            if (prs.length === 0) {
-              throw new Error(`No PR found for commit ${headSha}`);
-            }
-
-            const prNumber = prs[0].number;
-            console.log(`Found PR #${prNumber}`);
-            core.setOutput('pr-number', prNumber);
+      - uses: actions/checkout@v6
 
       - name: Download release preview comment
         uses: actions/github-script@v7
         with:
           script: |
             const artifactName = 'release-preview-comment';
-            console.log(`Looking for artifact: ${artifactName}`);
+            const previewRunId = context.payload.workflow_run.id;
+            console.log(
+              `Downloading artifact from PR Release Preview run ${previewRunId} (head ${context.payload.workflow_run.head_sha})`
+            );
 
             const allArtifacts = await github.rest.actions.listWorkflowRunArtifacts({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              run_id: context.payload.workflow_run.id,
+              run_id: previewRunId,
             });
             console.log(
               'Available artifacts:',
@@ -61,7 +44,7 @@ jobs:
             );
 
             if (!matchArtifact) {
-              throw new Error(`Artifact "${artifactName}" not found!`);
+              throw new Error(`Artifact "${artifactName}" not found on run ${previewRunId}`);
             }
 
             const download = await github.rest.actions.downloadArtifact({
@@ -80,11 +63,15 @@ jobs:
       - name: Extract release preview comment
         run: unzip release-preview-comment.zip
 
+      - name: Resolve PR
+        id: resolve-pr
+        uses: ./.github/actions/resolve-pr-from-workflow-run
+
       - name: Find existing preview comment
         uses: peter-evans/find-comment@v4
         id: find-comment
         with:
-          issue-number: ${{ steps.pr-info.outputs.pr-number }}
+          issue-number: ${{ steps.resolve-pr.outputs.pr-number }}
           comment-author: github-actions[bot]
           body-includes: ngx-deploy-npm-release-preview
 
@@ -92,6 +79,6 @@ jobs:
         uses: peter-evans/create-or-update-comment@v5
         with:
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
-          issue-number: ${{ steps.pr-info.outputs.pr-number }}
+          issue-number: ${{ steps.resolve-pr.outputs.pr-number }}
           edit-mode: replace
           body-path: comment.md

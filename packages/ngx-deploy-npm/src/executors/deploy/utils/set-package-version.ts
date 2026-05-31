@@ -17,3 +17,24 @@ export async function setPackageVersion(dir: string, packageVersion: string) {
     { encoding: 'utf8' }
   );
 }
+
+export async function withTemporaryPackageVersion(
+  dir: string,
+  packageVersion: string,
+  fn: () => Promise<void>
+): Promise<void> {
+  const packageJsonPath = path.join(dir, 'package.json');
+  const originalContent = await fileUtils.readFileAsync(packageJsonPath, {
+    encoding: 'utf8',
+  });
+
+  await setPackageVersion(dir, packageVersion);
+
+  try {
+    await fn();
+  } finally {
+    await fileUtils.writeFileAsync(packageJsonPath, originalContent, {
+      encoding: 'utf8',
+    });
+  }
+}

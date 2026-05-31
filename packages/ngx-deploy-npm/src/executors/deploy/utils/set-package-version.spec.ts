@@ -1,5 +1,8 @@
 import * as fileUtils from '../../../utils';
-import { setPackageVersion } from './set-package-version';
+import {
+  setPackageVersion,
+  withTemporaryPackageVersion,
+} from './set-package-version';
 
 jest.mock('../../../utils', () => {
   return {
@@ -60,5 +63,89 @@ describe('setPackageVersion', () => {
     await setPackageVersion(dir, version);
 
     expect(written.value).toEqual(JSON.stringify(expectedPackage, null, 4));
+  });
+});
+
+describe('withTemporaryPackageVersion', () => {
+  function setupWithTemporaryPackageVersion(
+    opts: {
+      version?: string;
+      dir?: string;
+      packageJson?: Record<string, unknown>;
+      fn?: () => Promise<void>;
+      fnError?: Error;
+    } = {}
+  ) {
+    const {
+      version = '1.0.1-next0',
+      dir = 'some/random/dir',
+      packageJson = {
+        name: 'ngx-deploy-npm',
+        version: 'boilerPlate',
+        description: 'Publish your libraries to NPM with just one command',
+        main: 'index.js',
+      },
+      fn = () => Promise.resolve(),
+      fnError,
+    } = opts;
+
+    const originalContent = JSON.stringify(packageJson);
+    let currentContent = originalContent;
+    const writes: string[] = [];
+
+    jest
+      .spyOn(fileUtils, 'readFileAsync')
+      .mockImplementation(() => Promise.resolve(currentContent));
+
+    jest.spyOn(fileUtils, 'writeFileAsync').mockImplementation((_, data) => {
+      currentContent = data as string;
+      writes.push(currentContent);
+      return Promise.resolve();
+    });
+
+    const fnToRun = fnError === undefined ? fn : () => Promise.reject(fnError);
+
+    return {
+      dir,
+      version,
+      originalContent,
+      fnToRun,
+      getCurrentContent: () => currentContent,
+      writes,
+    };
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('should apply packageVersion temporarily and restore the original content', async () => {
+    const {
+      dir,
+      version,
+      originalContent,
+      fnToRun,
+      getCurrentContent,
+      writes,
+    } = setupWithTemporaryPackageVersion();
+
+    await withTemporaryPackageVersion(dir, version, fnToRun);
+
+    expect(writes).toHaveLength(2);
+    expect(JSON.parse(writes[0]).version).toBe(version);
+    expect(getCurrentContent()).toEqual(originalContent);
+  });
+
+  it('should restore the original content when fn throws', async () => {
+    const { dir, version, originalContent, fnToRun, getCurrentContent } =
+      setupWithTemporaryPackageVersion({
+        fnError: new Error('callback failed'),
+      });
+
+    await expect(() =>
+      withTemporaryPackageVersion(dir, version, fnToRun)
+    ).rejects.toThrow('callback failed');
+
+    expect(getCurrentContent()).toEqual(originalContent);
   });
 });
