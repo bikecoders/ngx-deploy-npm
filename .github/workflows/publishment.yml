@@ -49,7 +49,7 @@ jobs:
     needs: [release-preliminar, e2e-test, test, backwards-compatibility-test]
     permissions:
       id-token: write # OIDC for npm trusted publishing
-      contents: read
+      contents: write # @jscutlery/semver:github (gh release create)
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
@@ -63,6 +63,8 @@ jobs:
       # publisher on npmjs.com for workflow publishment.yml (see contributors doc).
       - name: Version and Publishment
         run: npx nx version ngx-deploy-npm
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Tag last-release
         run: git tag --force last-release
