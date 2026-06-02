@@ -1,7 +1,9 @@
 import { logger } from '@nx/devkit';
+import * as fsPromises from 'node:fs/promises';
 import { DeployExecutorOptions } from '../schema';
 import { npmAccess } from '../../../core';
 import * as engine from './engine';
+import * as publishReadyChecks from './publish-ready-checks';
 import * as spawn from '../utils/spawn-async';
 import * as setPackage from '../utils/set-package-version';
 import { mockProjectDist, mockProjectRoot } from '../../../__mocks__/mocks';
@@ -699,6 +701,430 @@ describe('engine', () => {
         `${mockPackageJson.name}@${mockPackageJson.version}`,
         'version',
       ]);
+    });
+  });
+
+  describe('checkPublishReady', () => {
+    type CheckPublishReadySetupOptions = {
+      checkPublishReady?: DeployExecutorOptions['checkPublishReady'];
+      dryRun?: boolean;
+      readyChecksFail?: boolean;
+      mockReadyChecks?: boolean;
+      options?: Partial<Omit<DeployExecutorOptions, 'distFolderPath'>>;
+      mockPackageJson?: SetupOptions['mockPackageJson'];
+      spawnAsyncMock?: SetupOptions['spawnAsyncMock'];
+    };
+
+    function setupCheckPublishReady(opts: CheckPublishReadySetupOptions = {}) {
+      const {
+        checkPublishReady,
+        dryRun = false,
+        readyChecksFail = false,
+        mockReadyChecks = true,
+        options: extraOptions,
+        mockPackageJson,
+        spawnAsyncMock,
+      } = opts;
+
+      const runPublishReadyChecksSpy = jest.spyOn(
+        publishReadyChecks,
+        'runPublishReadyChecks'
+      );
+
+      if (mockReadyChecks) {
+        runPublishReadyChecksSpy.mockImplementation(() =>
+          readyChecksFail
+            ? Promise.reject(
+                new Error(
+                  'ngx-deploy-npm: Registry authentication failed for https://registry.npmjs.org/.'
+                )
+              )
+            : Promise.resolve()
+        );
+      }
+
+      const logDualDryRunWarningSpy = jest
+        .spyOn(publishReadyChecks, 'logDualDryRunWarning')
+        .mockImplementation(() => undefined);
+
+      const loggerInfoSpy = jest
+        .spyOn(logger, 'info')
+        .mockImplementation(() => undefined);
+
+      const base = setup({
+        ...(mockPackageJson ? { mockPackageJson } : {}),
+        ...(spawnAsyncMock ? { spawnAsyncMock } : {}),
+        options: {
+          ...defaultOption,
+          ...(checkPublishReady !== undefined ? { checkPublishReady } : {}),
+          dryRun,
+          ...extraOptions,
+        },
+      });
+
+      return {
+        ...base,
+        runPublishReadyChecksSpy,
+        logDualDryRunWarningSpy,
+        loggerInfoSpy,
+      };
+    }
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('should not run publish ready checks when checkPublishReady is unset', async () => {
+      const { absoluteDistFolderPath, options, runPublishReadyChecksSpy } =
+        setupCheckPublishReady({ checkPublishReady: undefined });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(runPublishReadyChecksSpy).not.toHaveBeenCalled();
+    });
+
+    it('should run publish ready checks before publish when mode is `publish`', async () => {
+      const { absoluteDistFolderPath, options, runPublishReadyChecksSpy } =
+        setupCheckPublishReady({ checkPublishReady: 'publish' });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(runPublishReadyChecksSpy).toHaveBeenCalledWith(
+        absoluteDistFolderPath,
+        options,
+        expect.objectContaining({ access: npmAccess.public })
+      );
+      expect(spawn.spawnAsync).toHaveBeenCalledWith('npm', [
+        'publish',
+        absoluteDistFolderPath,
+        '--access',
+        npmAccess.public,
+      ]);
+    });
+
+    it('should skip publish when mode is `probe` and deploy `--dry-run` is false', async () => {
+      const {
+        absoluteDistFolderPath,
+        options,
+        runPublishReadyChecksSpy,
+        loggerInfoSpy,
+      } = setupCheckPublishReady({ checkPublishReady: 'probe', dryRun: false });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(runPublishReadyChecksSpy).toHaveBeenCalled();
+      expect(loggerInfoSpy).toHaveBeenCalledWith(
+        expect.stringContaining('checkPublishReady=probe completed')
+      );
+      expect(spawn.spawnAsync).not.toHaveBeenCalledWith('npm', [
+        'publish',
+        absoluteDistFolderPath,
+        '--access',
+        npmAccess.public,
+      ]);
+    });
+
+    it('should continue to deploy dry-run publish when mode is `probe` and deploy `--dry-run` is true', async () => {
+      const {
+        absoluteDistFolderPath,
+        options,
+        runPublishReadyChecksSpy,
+        logDualDryRunWarningSpy,
+      } = setupCheckPublishReady({
+        checkPublishReady: 'probe',
+        dryRun: true,
+      });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(logDualDryRunWarningSpy).toHaveBeenCalledWith('probe');
+      expect(runPublishReadyChecksSpy).toHaveBeenCalled();
+      expect(spawn.spawnAsync).toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining([
+          'publish',
+          absoluteDistFolderPath,
+          '--dry-run',
+          '--access',
+          npmAccess.public,
+        ])
+      );
+    });
+
+    it('should warn about dual dry-run when publish mode and deploy `--dry-run` is true', async () => {
+      const { absoluteDistFolderPath, options, logDualDryRunWarningSpy } =
+        setupCheckPublishReady({
+          checkPublishReady: 'publish',
+          dryRun: true,
+        });
+
+      await engine.run(absoluteDistFolderPath, options);
+
+      expect(logDualDryRunWarningSpy).toHaveBeenCalledWith('publish');
+      expect(spawn.spawnAsync).toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining([
+          'publish',
+          absoluteDistFolderPath,
+          '--dry-run',
+          '--access',
+          npmAccess.public,
+        ])
+      );
+    });
+
+    it('should not publish when publish ready checks fail', async () => {
+      const { absoluteDistFolderPath, options } = setupCheckPublishReady({
+        checkPublishReady: 'publish',
+        readyChecksFail: true,
+      });
+
+      await expect(engine.run(absoluteDistFolderPath, options)).rejects.toThrow(
+        'Registry authentication failed'
+      );
+
+      expect(spawn.spawnAsync).not.toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['publish', absoluteDistFolderPath])
+      );
+    });
+
+    describe('with packageVersion and checkExisting', () => {
+      const readyChecksPackageJson = {
+        name: '@test/package',
+        version: '1.0.0',
+        description: 'desc',
+        license: 'MIT',
+        repository: 'https://github.com/org/repo',
+        main: './index.js',
+      };
+
+      type IntegrationSetupOptions = {
+        checkPublishReady?: 'probe' | 'publish';
+        dryRun?: boolean;
+        packageVersion?: string;
+        checkExisting?: 'error';
+        packageExistsOnRegistry?: boolean;
+      };
+
+      function isProbePublishArgs(args: string[]) {
+        const tagIndex = args.indexOf('--tag');
+
+        return tagIndex !== -1 && args[tagIndex + 1] === 'verify';
+      }
+
+      function setupCheckPublishReadyIntegration(
+        opts: IntegrationSetupOptions = {}
+      ) {
+        const {
+          checkPublishReady = 'publish',
+          dryRun = false,
+          packageVersion,
+          checkExisting,
+          packageExistsOnRegistry = false,
+        } = opts;
+
+        let currentContent = JSON.stringify(readyChecksPackageJson);
+        const publishCalls: string[][] = [];
+        const viewCalls: string[][] = [];
+
+        const spawnAsyncMock: SetupOptions['spawnAsyncMock'] = (_, args) => {
+          const command = args ?? [];
+
+          if (command[0] === 'view') {
+            viewCalls.push(command);
+            return packageExistsOnRegistry
+              ? Promise.resolve()
+              : Promise.reject(new Error('not found'));
+          }
+
+          if (command[0] === 'publish') {
+            publishCalls.push(command);
+          }
+
+          return Promise.resolve();
+        };
+
+        const base = setupCheckPublishReady({
+          checkPublishReady,
+          dryRun,
+          mockReadyChecks: false,
+          mockPackageJson: readyChecksPackageJson,
+          spawnAsyncMock,
+          options: {
+            ...(packageVersion ? { packageVersion } : {}),
+            ...(checkExisting ? { checkExisting } : {}),
+          },
+        });
+
+        jest
+          .spyOn(fsPromises, 'stat')
+          .mockImplementation(() =>
+            Promise.resolve({ isDirectory: () => true } as Awaited<
+              ReturnType<typeof fsPromises.stat>
+            >)
+          );
+
+        jest
+          .spyOn(fileUtils, 'readFileAsync')
+          .mockImplementation(() => Promise.resolve(currentContent));
+
+        jest
+          .spyOn(fileUtils, 'writeFileAsync')
+          .mockImplementation((_, data) => {
+            currentContent = data as string;
+            return Promise.resolve();
+          });
+
+        jest
+          .spyOn(fileUtils, 'fileExists')
+          .mockImplementation(() => Promise.resolve(true));
+
+        const setPackageVersionSpy = jest.spyOn(
+          setPackage,
+          'setPackageVersion'
+        );
+
+        return {
+          ...base,
+          publishCalls,
+          viewCalls,
+          getCurrentContent: () => currentContent,
+          setPackageVersionSpy,
+          packageVersion,
+        };
+      }
+
+      it('should run `--check-publish-ready` then `--check-existing` against packageVersion when deploy `--dry-run` is true', async () => {
+        const {
+          absoluteDistFolderPath,
+          options,
+          packageVersion,
+          publishCalls,
+          viewCalls,
+          getCurrentContent,
+          runPublishReadyChecksSpy,
+        } = setupCheckPublishReadyIntegration({
+          checkPublishReady: 'publish',
+          packageVersion: '2.0.0',
+          dryRun: true,
+          checkExisting: 'error',
+          packageExistsOnRegistry: false,
+        });
+
+        await engine.run(absoluteDistFolderPath, options);
+
+        expect(runPublishReadyChecksSpy).toHaveBeenCalled();
+        expect(viewCalls).toContainEqual([
+          'view',
+          `@test/package@${packageVersion}`,
+          'version',
+        ]);
+        expect(publishCalls.some(args => isProbePublishArgs(args))).toBe(true);
+        expect(
+          publishCalls.some(
+            args => args.includes('--dry-run') && !isProbePublishArgs(args)
+          )
+        ).toBe(true);
+        expect(JSON.parse(getCurrentContent()).version).toBe('1.0.0');
+      });
+
+      it('should set packageVersion before checkPublishReady when not dry-run', async () => {
+        const {
+          absoluteDistFolderPath,
+          options,
+          setPackageVersionSpy,
+          runPublishReadyChecksSpy,
+        } = setupCheckPublishReadyIntegration({
+          checkPublishReady: 'publish',
+          packageVersion: '2.0.0',
+          checkExisting: 'error',
+          packageExistsOnRegistry: false,
+        });
+
+        await engine.run(absoluteDistFolderPath, options);
+
+        expect(setPackageVersionSpy).toHaveBeenCalledWith(
+          absoluteDistFolderPath,
+          '2.0.0'
+        );
+        expect(runPublishReadyChecksSpy).toHaveBeenCalled();
+      });
+
+      it('should throw when checkExisting is error and version exists after checkPublishReady', async () => {
+        const {
+          absoluteDistFolderPath,
+          options,
+          mockPackageJson,
+          publishCalls,
+          viewCalls,
+          runPublishReadyChecksSpy,
+        } = setupCheckPublishReadyIntegration({
+          checkPublishReady: 'publish',
+          checkExisting: 'error',
+          packageExistsOnRegistry: true,
+        });
+
+        await expect(() =>
+          engine.run(absoluteDistFolderPath, options)
+        ).rejects.toThrow(
+          `Package ${mockPackageJson.name}@${mockPackageJson.version} already exists in registry.`
+        );
+
+        expect(runPublishReadyChecksSpy).toHaveBeenCalled();
+        expect(viewCalls).toContainEqual([
+          'view',
+          `${mockPackageJson.name}@${mockPackageJson.version}`,
+          'version',
+        ]);
+        expect(publishCalls.every(args => isProbePublishArgs(args))).toBe(true);
+      });
+
+      it('should publish when checkExisting is error and version is not on registry after checkPublishReady', async () => {
+        const {
+          absoluteDistFolderPath,
+          options,
+          mockPackageJson,
+          publishCalls,
+          viewCalls,
+          runPublishReadyChecksSpy,
+        } = setupCheckPublishReadyIntegration({
+          checkPublishReady: 'publish',
+          checkExisting: 'error',
+          packageExistsOnRegistry: false,
+        });
+
+        await engine.run(absoluteDistFolderPath, options);
+
+        expect(runPublishReadyChecksSpy).toHaveBeenCalled();
+        expect(viewCalls).toContainEqual([
+          'view',
+          `${mockPackageJson.name}@${mockPackageJson.version}`,
+          'version',
+        ]);
+        expect(
+          publishCalls.some(
+            args =>
+              args[0] === 'publish' &&
+              args[1] === absoluteDistFolderPath &&
+              !isProbePublishArgs(args)
+          )
+        ).toBe(true);
+      });
+
+      it('should not run checkExisting when checkPublishReady is `probe` without deploy dryRun', async () => {
+        const { absoluteDistFolderPath, options, viewCalls, publishCalls } =
+          setupCheckPublishReadyIntegration({
+            checkPublishReady: 'probe',
+            checkExisting: 'error',
+            packageExistsOnRegistry: true,
+          });
+
+        await engine.run(absoluteDistFolderPath, options);
+
+        expect(viewCalls).toHaveLength(0);
+        expect(publishCalls.every(args => isProbePublishArgs(args))).toBe(true);
+      });
     });
   });
 
