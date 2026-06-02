@@ -64,7 +64,7 @@ jobs:
       - name: Version and Publishment
         run: npx nx version ngx-deploy-npm
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_BOT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GIT_BOT_TOKEN }}
 
       - name: Tag last-release
         run: git tag --force last-release
