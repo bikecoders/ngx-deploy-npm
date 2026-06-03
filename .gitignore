@@ -60,6 +60,8 @@ reports/*
 
 # End of https://www.toptal.com/developers/gitignore/api/sonarqube
 
+.verdaccio/htpasswd
+
 .env
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
