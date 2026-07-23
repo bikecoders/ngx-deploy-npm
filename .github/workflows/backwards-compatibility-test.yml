@@ -26,6 +26,22 @@ jobs:
           - nx-version: 'previous'
             node-version: 20
 
+          # pinned (21.x) — all Node versions from Nx docs
+          - nx-version: '21.6.11' # 21.x
+            node-version: 24
+          - nx-version: '21.6.11'
+            node-version: 22
+          - nx-version: '21.6.11'
+            node-version: 20
+
+          # pinned (20.x) — all Node versions from Nx docs
+          - nx-version: '20.8.4' # 20.x
+            node-version: 22
+          - nx-version: '20.8.4'
+            node-version: 20
+          - nx-version: '20.8.4'
+            node-version: 18
+
           # minimum supported (19.x) — latest installable 19.x (19.8.15 is deprecated)
           - nx-version: '19.8.14' # 19.x
             node-version: 22
