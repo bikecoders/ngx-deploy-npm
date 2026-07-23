@@ -8,18 +8,18 @@ jobs:
     strategy:
       matrix:
         include:
-          # '' = current workspace version (22.x) — all Node versions from Nx docs
-          - nx-version: '' # 22.x
+          # '' = current workspace version (23.x) — all Node versions from Nx docs
+          - nx-version: '' # 23.x
             node-version: 26
           - nx-version: ''
             node-version: 24
           - nx-version: ''
             node-version: 22
-          - nx-version: ''
-            node-version: 20
 
-          # previous = npm dist-tag (21.x) — all Node versions from Nx docs
-          - nx-version: 'previous' # 21.x
+          # previous = npm dist-tag (22.x) — all Node versions from Nx docs
+          - nx-version: 'previous' # 22.x
+            node-version: 26
+          - nx-version: 'previous'
             node-version: 24
           - nx-version: 'previous'
             node-version: 22
