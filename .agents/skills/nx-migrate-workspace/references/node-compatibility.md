@@ -20,17 +20,19 @@
 | Nx × Node matrix    | https://nx.dev/docs/technologies/node/introduction |
 | Node release status | https://nodejs.org/en/about/previous-releases      |
 
-## How `nx-version` resolves (three fixed YAML values)
+## How `nx-version` resolves (one row per supported major)
 
-YAML keys stay `''`, `'previous'`, and one pinned semver. Edit **`node-version` rows** and **comments** only.
+**We support every Nx major from the minimum in `packages/ngx-deploy-npm` `peerDependencies` up through the workspace major, and we test all of them** — not just current/previous/minimum. `''` and `'previous'` are tags; every other supported major in between gets its own pinned-semver row.
 
-| YAML `nx-version` | Type                      | Resolves at CI/smoke time                                                                                                                                                          |
-| ----------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `''`              | Workspace (not a tag)     | `package.json` → `devDependencies.nx` (current workspace after migrate)                                                                                                            |
-| `'previous'`      | **npm dist-tag**          | Literal tag `previous` on install (`create-nx-workspace@previous`, …). Major from `npm view nx dist-tags` or `npm view create-nx-workspace@previous version` — not workspace math. |
-| `'19.8.14'`       | Pinned semver (not a tag) | **Latest patch** of the minimum supported **major** ([below](#minimum-pin-latest-patch-of-a-major))                                                                                |
+| YAML `nx-version`          | Type                      | Resolves at CI/smoke time                                                                                                                                                          |
+| -------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `''`                       | Workspace (not a tag)     | `package.json` → `devDependencies.nx` (current workspace after migrate)                                                                                                            |
+| `'previous'`               | **npm dist-tag**          | Literal tag `previous` on install (`create-nx-workspace@previous`, …). Major from `npm view nx dist-tags` or `npm view create-nx-workspace@previous version` — not workspace math. |
+| `'20.8.4'`, `'21.6.11'`, … | Pinned semver (not a tag) | **Latest non-deprecated patch** of each supported major not already covered by `''` or `'previous'` ([below](#pinned-majors-latest-patch-of-each))                                 |
 
 **Keep `'previous'` as a tag** — Nx sometimes ships fixes only on `previous`; a frozen semver in YAML would miss them.
+
+**Deriving the full major list:** take `packages/ngx-deploy-npm/package.json` → `peerDependencies["@nx/devkit"]` minimum major (e.g. `>=19.0.0` → **19**) through the workspace major (e.g. **23**). Every major in that inclusive range needs a row. Majors already covered by `''` (workspace) or `'previous'` (dist-tag) don't need a duplicate pinned row — every other major in the range does.
 
 ## Map Node.js versions from the Nx table → `node-version`
 
@@ -52,10 +54,11 @@ The Nx docs **Node Version** column is **Node.js**, not Nx (e.g. Nx 22.x → `26
 
 1. Fetch Nx Node compatibility table.
 2. **Workspace major** — `npm pkg get devDependencies.nx` (or read `package.json`); strip to major (e.g. `22` from `22.7.2`).
-3. **`''` block** — comment `# <major>.x`; all `node-version` rows from the Nx docs row for that major.
-4. **`'previous'` block** — `npm view nx dist-tags`; comment for the major `previous` points at; all Node rows for that major; YAML stays `'previous'`.
-5. **Minimum pin block** — [Minimum pin](#minimum-pin-latest-patch-of-a-major).
-6. No duplicate `(nx-version, node-version)` pairs.
+3. **Minimum supported major** — `packages/ngx-deploy-npm/package.json` → `peerDependencies["@nx/devkit"]` lower bound (e.g. `>=19.0.0` → **19**).
+4. **`''` block** — comment `# <major>.x`; all `node-version` rows from the Nx docs row for the workspace major.
+5. **`'previous'` block** — `npm view nx dist-tags`; comment for the major `previous` points at; all Node rows for that major; YAML stays `'previous'`.
+6. **Pinned-major blocks** — for every major strictly between the minimum supported major and the workspace major that isn't the `previous` major, add a pinned-semver block ([below](#pinned-majors-latest-patch-of-each)). Also pin the minimum major itself unless it happens to equal `previous`'s major.
+7. No duplicate `(nx-version, node-version)` pairs; no gaps in the major range.
 
 Do **not** add matrix rows for Nx majors above the workspace version in `package.json`.
 
@@ -77,40 +80,48 @@ Update workflow comments when the workspace major changes. These files do **not*
 
 ```yaml
 include:
-  - nx-version: '' # package.json devDependencies.nx (e.g. 22.x)
+  - nx-version: '' # package.json devDependencies.nx (e.g. 23.x)
     node-version: <all nodes for workspace major from Nx docs>
-  - nx-version: 'previous' # npm dist-tag
+  - nx-version: 'previous' # npm dist-tag (e.g. 22.x)
     node-version: <all nodes for major from npm view nx dist-tags → previous>
-  - nx-version: '19.5.7' # latest nx@<minimum-major> on npm
-    node-version: <retained or inferred set>
+  - nx-version: '21.6.11' # latest nx@21 on npm
+    node-version: <all nodes for 21.x from Nx docs, or inferred>
+  - nx-version: '20.8.4' # latest nx@20 on npm
+    node-version: <all nodes for 20.x from Nx docs, or inferred>
+  - nx-version: '19.8.14' # latest non-deprecated nx@19 on npm
+    node-version: <retained or inferred set — 19.x predates the docs table>
 ```
 
-Example when `package.json` has **22.7.2** and `previous: 21.6.11` (verify live):
+Example when `package.json` has **23.1.0**, peer minimum is **19**, and `previous: 22.7.7` (verify live — every major 19–23 needs a row):
 
 | YAML `nx-version` | Resolves to            | Node rows      |
 | ----------------- | ---------------------- | -------------- |
-| `''`              | 22.x from package.json | 26, 24, 22, 20 |
-| `previous`        | 21.x via npm tag       | 24, 22, 20     |
-| `19.8.14`         | latest 19.x pin        | 22, 20, 18     |
+| `''`              | 23.x from package.json | 26, 24, 22     |
+| `previous`        | 22.x via npm tag       | 26, 24, 22, 20 |
+| `21.6.11`         | pinned 21.x            | 24, 22, 20     |
+| `20.8.4`          | pinned 20.x            | 22, 20, 18     |
+| `19.8.14`         | pinned 19.x (min)      | 22, 20, 18     |
 
-### Minimum pin (latest patch of a major)
+### Pinned majors (latest patch of each)
 
-Oldest major still in `packages/ngx-deploy-npm` `peerDependencies` (e.g. `>=19.0.0` → major **19**). Pin the **last release of that major** on npm:
+Every supported major that isn't the workspace major (`''`) or the `previous` dist-tag major gets its own pinned row — the **latest non-deprecated release** of that major on npm:
 
 ```bash
 npm view nx@<major> version
-# e.g. npm view nx@19 version → 19.5.7 (not 19.4.1)
+# e.g. npm view nx@21 version → 21.6.11
+npm view nx@<major>.<latest-minor>.<latest-patch> deprecated
+# confirm it's not deprecated; if it is, step back one patch
 ```
 
-**When `previous` moves up** (new Nx major released on npm), the major that dropped off `previous` but is still supported becomes (or stays) the pin — at latest patch for that major.
+**When `previous` moves up** (new Nx major released on npm), the major that dropped off `previous` keeps (or gains) its own pinned row at latest patch — it's still in the supported range, just no longer reachable via the `previous` tag.
 
-Example: workspace was on **20**, you migrated to **21**; `previous` now tracks **20** on npm; pin **latest 19.x** if peers still allow 19.
+Example: workspace was on **20**, you migrated to **21**; `previous` now tracks **20** on npm, so **20** stays covered by the `previous` tag; a prior pinned **20.x** row (if any) becomes redundant and should be removed, while **19** keeps its own pinned row.
 
-**Raising the floor** (`>=20.0.0`): breaking change — pin latest **20.x**, remove 19 rows, bump peer, update README.
+**Raising the floor** (`>=20.0.0`): breaking change — drop the **19.x** row, bump the peer dependency, update README.
 
-### Minimum pin not on Nx docs
+### Pinned major not on Nx docs
 
-Retain Node rows or infer from the closest documented major.
+Retain existing Node rows for that pin, or infer from the closest documented major (the Nx docs table only covers the last few majors; 19.x and older predate it).
 
 ## `.nvmrc`
 
@@ -133,8 +144,9 @@ Set `devDependencies["@types/node"]` to `^<major>.<latest-patch>` (e.g. `^24.12.
 - [ ] Fetched Nx and Node release pages
 - [ ] `''` tier: all nodes for **workspace** major; comment updated
 - [ ] `previous` tier: yaml `'previous'`; nodes for tag major from npm
-- [ ] Minimum pin: latest patch on npm for minimum supported major
-- [ ] No duplicate pairs; no tiers above workspace major
+- [ ] Every major from the peer-dependency minimum through the workspace major has a row — `''`, `previous`, or a pinned semver; no gaps
+- [ ] Each pinned row uses the latest non-deprecated patch of its major
+- [ ] No duplicate `(nx-version, node-version)` pairs; no tiers above workspace major
 - [ ] `.nvmrc` matches workspace major ∩ LTS
 - [ ] Root `@types/node` major matches `.nvmrc` (bump if `nx migrate` left an older major)
 - [ ] [basic-test.yml](../../../.github/workflows/basic-test.yml) and [e2e-test.yml](../../../.github/workflows/e2e-test.yml) `node-version` list all nodes for workspace major
