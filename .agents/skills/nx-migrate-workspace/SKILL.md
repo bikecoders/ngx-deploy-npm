@@ -2,9 +2,10 @@
 name: nx-migrate-workspace
 description: >-
   Upgrade this Nx workspace one major per run with nx migrate, then update
-  backwards-compat CI, basic-test/e2e Node matrices, .nvmrc, @types/node, and
-  GitHub main required status checks for .nvmrc Node from the workspace version
-  after migrations finish.
+  backwards-compat CI (one row per supported Nx major, not just
+  current/previous/minimum), basic-test/e2e Node matrices, .nvmrc,
+  @types/node, and GitHub main required status checks for .nvmrc Node from
+  the workspace version after migrations finish.
   Never jump multiple nx migrate majors in one run. Use when updating
   or migrating Nx.
 ---
@@ -17,9 +18,10 @@ The user reviews all changes — **never commit, push, or open a PR** unless ask
 
 1. **`nx migrate` one major per run** — e.g. on 21.x use `nx migrate 22` only; stop and summarize; repeat later for 23.
 2. **Compatibility CI last** — update [backwards-compatibility-test.yml](.github/workflows/backwards-compatibility-test.yml), [basic-test.yml](.github/workflows/basic-test.yml) (unit-test matrix), [e2e-test.yml](.github/workflows/e2e-test.yml), [.nvmrc](.nvmrc), root `package.json` `devDependencies["@types/node"]`, and **`main` branch protection** required contexts for `.nvmrc` Node only **after** `nx migrate --run-migrations`, using the version now in `package.json`.
-3. **Do not skip ahead in CI** — matrix rows must not target Nx majors above what `package.json` has after this run.
-4. **`npm exec nx …`** — this repo uses npm.
-5. **No git commits.**
+3. **Test every supported major, not just current/previous/minimum** — `backwards-compatibility-test.yml` needs one row per Nx major from the `peerDependencies` floor through the workspace major (see [node-compatibility.md](references/node-compatibility.md)); a gap in that range is a bug in the CI matrix.
+4. **Do not skip ahead in CI** — matrix rows must not target Nx majors above what `package.json` has after this run.
+5. **`npm exec nx …`** — this repo uses npm.
+6. **No git commits.**
 
 ## Before starting
 
@@ -85,13 +87,15 @@ Follow [references/node-compatibility.md](references/node-compatibility.md).
 
 `package.json` already reflects the new major. Align CI and `.nvmrc` with **current** resolution — not a future major:
 
-| `nx-version` in YAML | How it resolves                                   | What to update                                                 |
-| -------------------- | ------------------------------------------------- | -------------------------------------------------------------- |
-| `''`                 | `package.json` `devDependencies.nx`               | Comment + all `node-version` rows for **that** major (Nx docs) |
-| `'previous'`         | npm dist-tag `previous` (`npm view nx dist-tags`) | Keep `'previous'`; comment + Node rows for the tag’s major     |
-| pinned semver        | latest `npm view nx@<min-major> version`          | Pin patch / Node rows per reference                            |
+| `nx-version` in YAML                            | How it resolves                                                                                                    | What to update                                                 |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| `''`                                            | `package.json` `devDependencies.nx`                                                                                | Comment + all `node-version` rows for **that** major (Nx docs) |
+| `'previous'`                                    | npm dist-tag `previous` (`npm view nx dist-tags`)                                                                  | Keep `'previous'`; comment + Node rows for the tag’s major     |
+| pinned semver (**one row per remaining major**) | latest non-deprecated `npm view nx@<major> version`, for every supported major not covered by `''` or `'previous'` | Pin patch / Node rows per reference — do not skip a major      |
 
 Do **not** replace `'previous'` with a numeric version. **Keep the `previous` tag** — Nx sometimes ships fixes only there.
+
+**Supported range = `peerDependencies["@nx/devkit"]` floor through the workspace major.** E.g. floor 19, workspace 23 → majors 19, 20, 21, 22, 23 all need a row (22 via `previous`, 23 via `''`, 19/20/21 pinned).
 
 Also update [basic-test.yml](.github/workflows/basic-test.yml) (`unit-test` job) and [e2e-test.yml](.github/workflows/e2e-test.yml): set `node-version` to **every** Node major Nx documents for the **workspace** major (same list as the `''` tier in backwards-compat), e.g. Nx 22.x → `[20, 22, 24, 26]`. Update workflow comments when the workspace major changes.
 
