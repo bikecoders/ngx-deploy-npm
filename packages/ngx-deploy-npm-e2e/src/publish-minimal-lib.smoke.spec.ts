@@ -1,5 +1,5 @@
 import { uniq } from '@nx/plugin/testing';
-import { e2eTestTimeout, setup } from './utils';
+import { deployCommand, e2eTestTimeout, setup } from './utils';
 
 describe('Minimal Project', () => {
   it(
@@ -11,7 +11,10 @@ describe('Minimal Project', () => {
       const [uniqLibName] = processedLibs;
 
       executeCommand(
-        `npx nx deploy ${uniqLibName.name} --tag="e2e" --registry=http://localhost:4873 --packageVersion=0.0.0`
+        deployCommand(uniqLibName.name, {
+          tag: 'e2e',
+          packageVersion: '0.0.0',
+        })
       );
 
       expect(() => {

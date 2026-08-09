@@ -1,5 +1,10 @@
 import { uniq } from '@nx/plugin/testing';
-import { e2eTestTimeout, e2eTestTimeoutExtended, setup } from './utils';
+import {
+  deployCommand,
+  e2eTestTimeout,
+  e2eTestTimeoutExtended,
+  setup,
+} from './utils';
 
 describe('Publish', () => {
   test.each<{
@@ -38,7 +43,10 @@ describe('Publish', () => {
       const [lib] = processedLibs;
 
       executeCommand(
-        `npx nx deploy ${lib.name} --registry=http://localhost:4873 --tag="e2e" --packageVersion=0.0.0`
+        deployCommand(lib.name, {
+          tag: 'e2e',
+          packageVersion: '0.0.0',
+        })
       );
 
       expect(() => {
@@ -60,12 +68,20 @@ describe('Publish', () => {
       const [uniqLibName] = processedLibs;
 
       executeCommand(
-        `npx nx deploy ${uniqLibName.name} --tag="e2e" --registry=http://localhost:4873 --packageVersion=0.0.0 --checkExisting="error"`
+        deployCommand(uniqLibName.name, {
+          tag: 'e2e',
+          packageVersion: '0.0.0',
+          checkExisting: 'error',
+        })
       );
 
       expect(() => {
         executeCommand(
-          `npx nx deploy ${uniqLibName.name} --tag="e2e" --registry=http://localhost:4873 --packageVersion=0.0.0 --checkExisting="error"`
+          deployCommand(uniqLibName.name, {
+            tag: 'e2e',
+            packageVersion: '0.0.0',
+            checkExisting: 'error',
+          })
         );
       }).toThrow();
 

@@ -1,35 +1,7 @@
 import { uniq } from '@nx/plugin/testing';
-import { e2eTestTimeout, setup } from './utils';
+import { deployCommand, E2E_REGISTRY, e2eTestTimeout, setup } from './utils';
 
 describe('checkExisting and checkTag', () => {
-  const registry = 'http://localhost:4873';
-
-  function deployCommand(
-    libName: string,
-    {
-      packageVersion = '0.0.0',
-      tag,
-      checkExisting,
-      checkTag,
-    }: {
-      packageVersion?: string;
-      tag?: string;
-      checkExisting?: 'error' | 'skip';
-      checkTag?: boolean;
-    } = {}
-  ) {
-    return [
-      `npx nx deploy ${libName}`,
-      `--registry=${registry}`,
-      `--packageVersion=${packageVersion}`,
-      tag ? `--tag="${tag}"` : '',
-      checkExisting ? `--checkExisting="${checkExisting}"` : '',
-      checkTag ? '--checkTag' : '',
-    ]
-      .filter(Boolean)
-      .join(' ');
-  }
-
   it(
     'should honor checkExisting skip and checkTag when publishing',
     async () => {
@@ -38,11 +10,17 @@ describe('checkExisting and checkTag', () => {
       ]);
       const [lib] = processedLibs;
 
-      executeCommand(deployCommand(lib.name, { tag: 'e2e' }));
+      executeCommand(
+        deployCommand(lib.name, { tag: 'e2e', packageVersion: '0.0.0' })
+      );
 
       expect(() => {
         executeCommand(
-          deployCommand(lib.name, { tag: 'e2e', checkExisting: 'skip' })
+          deployCommand(lib.name, {
+            tag: 'e2e',
+            packageVersion: '0.0.0',
+            checkExisting: 'skip',
+          })
         );
       }).not.toThrow();
 
@@ -50,6 +28,7 @@ describe('checkExisting and checkTag', () => {
         executeCommand(
           deployCommand(lib.name, {
             tag: 'e2e',
+            packageVersion: '0.0.0',
             checkExisting: 'error',
             checkTag: true,
           })
@@ -68,7 +47,7 @@ describe('checkExisting and checkTag', () => {
 
       expect(() => {
         executeCommand(
-          `npm view ${lib.npmPackageName}@0.0.1 --registry=${registry}`
+          `npm view ${lib.npmPackageName}@0.0.1 --registry=${E2E_REGISTRY}`
         );
       }).not.toThrow();
 

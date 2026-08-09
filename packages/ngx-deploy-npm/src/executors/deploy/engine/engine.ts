@@ -10,12 +10,21 @@ import {
   spawnAsyncMatchStdout,
 } from '../utils';
 import { DeployExecutorOptions } from '../schema';
+import {
+  DEFAULT_REGISTRY,
+  extractOnlyNPMOptions,
+  getOptionsStringArr,
+} from './npm-options';
+import {
+  isCheckPublishReadyEnabled,
+  logDualDryRunWarning,
+  runPublishReadyChecks,
+} from './publish-ready-checks';
 
 type PackageInfo = { name: string; version: string };
 type ExistingPackagePolicy = 'error' | 'warning' | 'skip';
 
 const NPM_PACK_TARBALL_SIZE_PATTERN = /"size":\s*(\d+)/;
-const DEFAULT_REGISTRY = 'https://registry.npmjs.org/';
 const DEFAULT_TAG = 'latest';
 
 async function checkIfPackageExists(
@@ -207,6 +216,21 @@ async function runDeploy(
 
     const npmOptions = extractOnlyNPMOptions(options);
 
+    if (isCheckPublishReadyEnabled(options.checkPublishReady)) {
+      if (options.dryRun) {
+        logDualDryRunWarning(options.checkPublishReady);
+      }
+
+      await runPublishReadyChecks(distFolderPath, options, npmOptions);
+
+      if (options.checkPublishReady === 'probe' && !options.dryRun) {
+        logger.info(
+          'ngx-deploy-npm: checkPublishReady=probe completed. Skipping publish.'
+        );
+        return;
+      }
+    }
+
     if (!(await ensurePublishAllowed(distFolderPath, options, npmOptions))) {
       return;
     }
@@ -242,60 +266,4 @@ export async function run(
   }
 
   await runDeploy(distFolderPath, options);
-}
-
-/**
- * Extract only the options that the `npm publish` command can process
- *
- * @param param0 All the options sent to deploy
- */
-function extractOnlyNPMOptions({
-  access,
-  tag,
-  otp,
-  dryRun,
-  registry,
-  provenance,
-  provenanceFile,
-  ignoreScripts,
-}: DeployExecutorOptions): NpmPublishOptions {
-  return {
-    access,
-    tag,
-    otp,
-    dryRun,
-    registry,
-    provenance,
-    provenanceFile,
-    ignoreScripts,
-  };
-}
-
-function toKebabCase(str: string) {
-  return str.replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2').toLowerCase();
-}
-
-function getOptionsStringArr(options: NpmPublishOptions): string[] {
-  return Object.entries(options).flatMap(([optKey, value]) => {
-    if (
-      value === undefined ||
-      value === null ||
-      value === false ||
-      value === ''
-    ) {
-      return [];
-    }
-
-    const cmdOption = `--${toKebabCase(optKey)}`;
-
-    if (typeof value === 'boolean') {
-      return [cmdOption];
-    }
-
-    if (typeof value === 'string' || typeof value === 'number') {
-      return [cmdOption, String(value)];
-    }
-
-    return [];
-  });
 }

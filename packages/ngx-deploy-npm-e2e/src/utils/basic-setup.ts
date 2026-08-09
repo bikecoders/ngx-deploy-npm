@@ -3,7 +3,7 @@ import { dirname, join } from 'path';
 import { execSync } from 'child_process';
 
 import { ProjectConfiguration } from '@nx/devkit';
-import { readJson } from '@nx/plugin/testing';
+import { readJson, uniq } from '@nx/plugin/testing';
 import { logger } from '@nx/devkit';
 
 import { InstallGeneratorOptions } from 'bikecoders/ngx-deploy-npm';
@@ -259,6 +259,7 @@ async function createMinimalLib(
       name: `@mock-domain/${projectName}`,
       description: 'Minimal LIb',
       version: '1.0.0',
+      main: './hello-world.js',
     };
 
     // Add nx configuration with targets when not using project.json
@@ -277,8 +278,9 @@ async function createMinimalLib(
  * @returns The directory where the test project was created
  */
 async function createTestProject() {
-  const projectName =
-    process.env.NGX_DEPLOY_NPM_E2E__PROJECT_NAME || 'test-project';
+  const projectName = `${
+    process.env.NGX_DEPLOY_NPM_E2E__PROJECT_NAME || 'test-project'
+  }-${uniq('')}`;
   const projectDirectory = join(process.cwd(), 'tmp', projectName);
 
   // Ensure projectDirectory is empty
