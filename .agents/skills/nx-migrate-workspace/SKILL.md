@@ -20,7 +20,7 @@ The user reviews all changes — **never commit, push, or open a PR** unless ask
 2. **Compatibility CI last** — update [backwards-compatibility-test.yml](.github/workflows/backwards-compatibility-test.yml), [basic-test.yml](.github/workflows/basic-test.yml) (unit-test matrix), [e2e-test.yml](.github/workflows/e2e-test.yml), [.nvmrc](.nvmrc), root `package.json` `devDependencies["@types/node"]`, and **`main` branch protection** required contexts for `.nvmrc` Node only **after** `nx migrate --run-migrations`, using the version now in `package.json`.
 3. **Test every supported major, not just current/previous/minimum** — `backwards-compatibility-test.yml` needs one row per Nx major from the `peerDependencies` floor through the workspace major (see [node-compatibility.md](references/node-compatibility.md)); a gap in that range is a bug in the CI matrix.
 4. **Do not skip ahead in CI** — matrix rows must not target Nx majors above what `package.json` has after this run.
-5. **`npm exec nx …`** — this repo uses npm.
+5. **`npm exec nx …`** — this repo uses npm. When passing `--flags` to nx, use `npm exec -- nx …`; otherwise npm swallows flags like `--run-migrations` as its own config and nx silently runs without them.
 6. **No git commits.**
 
 ## Before starting
@@ -76,7 +76,7 @@ Use `nx_docs` or the package README for other Nx-coupled packages.
 ### 5 — Codemods
 
 ```bash
-npm exec nx migrate --run-migrations
+npm exec -- nx migrate --run-migrations
 ```
 
 Fix failures before step 6.
