@@ -47,6 +47,21 @@ runs:
         # Sets registry-url for npm publish. Release uses OIDC trusted publishing
         # (no NODE_AUTH_TOKEN); other jobs may still use NODE_AUTH_TOKEN when set.
         registry-url: https://registry.npmjs.org
+    # Workaround: npm 10 (bundled with Node 22) crashes with "Cannot read
+    # properties of null (reading 'edgesOut')" resolving the vitest/@vitest/ui
+    # ~4.1.x peer set that Nx >= 23.3 workspaces scaffold. Fixed in npm 11.6.0,
+    # no npm 10 backport: https://github.com/npm/cli/issues/8261
+    # Node 24+ already ship npm 11. Remove when the conditions in
+    # https://github.com/bikecoders/ngx-deploy-npm/issues/791 are met.
+    - name: Upgrade npm on Node 22
+      shell: bash
+      run: |
+        node_major=$(node -p 'process.versions.node.split(".")[0]')
+        npm_major=$(npm -v | cut -d. -f1)
+        if [ "$node_major" = "22" ] && [ "$npm_major" -lt 11 ]; then
+          npm install -g npm@11
+        fi
+        echo "node $(node -v), npm $(npm -v)"
     - name: npm install
       shell: bash
       run: npm ci
