@@ -41,6 +41,7 @@ Thumbs.db
 reports/*
 .nx/cache
 .nx/workspace-data
+.nx/migrate-runs
 
 # Created by https://www.toptal.com/developers/gitignore/api/sonarqube
 # Edit at https://www.toptal.com/developers/gitignore?templates=sonarqube
