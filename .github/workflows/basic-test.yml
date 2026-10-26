@@ -40,7 +40,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        # Nx 23.x — all Node versions from Nx docs (update when workspace major changes)
+        # Nx 24.x — Nx docs have no 24.x row yet; same Node set as 23.x (update when workspace major changes)
         node-version: [22, 24, 26]
     runs-on: ${{ matrix.os }}
     steps:

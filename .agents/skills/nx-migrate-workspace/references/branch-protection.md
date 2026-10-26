@@ -26,6 +26,8 @@ Example when `.nvmrc` is `24`:
 
 Lint/build use `.nvmrc` via setup (no matrix). Do **not** add required checks for other matrix rows (20, 22, 26) unless you intentionally want full-matrix gating.
 
+Backwards-compat smoke jobs are not required checks, so renaming their matrix rows never needs a protection change.
+
 ## How to derive context names
 
 Pattern: `{caller-job} / {matrix-job} ({os}, {node})`
@@ -34,22 +36,53 @@ Pattern: `{caller-job} / {matrix-job} ({os}, {node})`
 - Matrix jobs: `unit-test`, `e2e-test`.
 - `{node}` = integer from [.nvmrc](../../../.nvmrc).
 
-Confirm names on a recent green PR with `user-github` → `pull_request_read` → `get_check_runs` before updating protection.
+Confirm the names on a recent green PR before updating protection:
 
-## How to apply (preferred: repo-admin MCP)
+```bash
+gh pr checks <pr-number> --repo bikecoders/ngx-deploy-npm
+```
 
-Use **`ngx-deploy-npm-github-repo-admin`** (`CallMcpTool`, server `user-ngx-deploy-npm-github-repo-admin`):
+## How to apply (`gh api`)
 
-1. **`get_branch_protection`** — `owner: bikecoders`, `repo: ngx-deploy-npm`, `branch: main`. Read `required_status_checks.contexts`.
-2. Build the **full** new `contexts` list (GitHub replaces the array; it does not merge).
-3. **`update_branch_protection`** — pass `contexts` and `dry_run: true` first, then `dry_run: false` to apply. The tool preserves other protection fields from GET.
+Use the `gh` CLI. It authenticates with the user's login, which has admin on the repo.
 
-Do **not** use `apply_ruleset` on this repo unless migrating off legacy protection — rulesets would stack on classic rules.
+Do **not** use the `ngx-deploy-npm-github-repo-admin` MCP for this. It only manages **rulesets**: `check_protection` reads the rulesets API and reports `main` as "Unprotected" even though classic protection is active, and it has no tool to update classic required checks. Never use its `apply_ruleset` on this repo — rulesets would stack on top of the classic rules.
+
+### 1. Read current required checks
+
+```bash
+gh api repos/bikecoders/ngx-deploy-npm/branches/main/protection/required_status_checks \
+  --jq '{strict, checks}'
+```
+
+Each check is pinned to the app that reports it (`15368` = GitHub Actions, `12526` = SonarCloud). Keep those `app_id`s.
+
+### 2. Build the new list (preview)
+
+GitHub **replaces** the list; it does not merge. Send the full set, using `checks` (not the deprecated `contexts`, which drops the `app_id` pins). Example for `.nvmrc` 24 → 26:
+
+```bash
+OLD=24 NEW=26
+gh api repos/bikecoders/ngx-deploy-npm/branches/main/protection/required_status_checks \
+  --jq "{strict, checks: [.checks[] | .context |= sub(\", ${OLD}\\\\)\$\"; \", ${NEW})\")]}" \
+  > /tmp/required-checks.json
+cat /tmp/required-checks.json
+```
+
+Check the preview: only the four `…, <OLD>)` matrix contexts changed to `…, <NEW>)`, the five non-matrix checks are untouched, and every `app_id` is still present.
+
+### 3. Apply and verify
+
+```bash
+gh api -X PATCH repos/bikecoders/ngx-deploy-npm/branches/main/protection/required_status_checks \
+  --input /tmp/required-checks.json --jq '{strict, checks: [.checks[].context]}'
+```
+
+This endpoint changes only required status checks; reviews, admins enforcement and other protection settings stay as they are. Run step 1 again to confirm.
 
 ### Fallback
 
-- GitHub UI: Settings → Branches → `main` → required status checks.
-- `gh api` GET/PATCH `repos/bikecoders/ngx-deploy-npm/branches/main/protection` with the full protection body from GET.
+GitHub UI: Settings → Branches → `main` → Edit → required status checks.
 
 ## Node bump template (e.g. 20 → 24)
 
@@ -65,7 +98,7 @@ Keep the five non-matrix checks unchanged.
 ## Checklist
 
 - [ ] `.nvmrc` and CI matrices updated per [node-compatibility.md](node-compatibility.md)
-- [ ] Check context names verified on a recent PR (`get_check_runs`)
-- [ ] `get_branch_protection` on `main` — no stale `…, <old-nvmrc>)` contexts
-- [ ] `update_branch_protection` applied (or confirmed already correct)
+- [ ] Check context names verified on a recent PR (`gh pr checks`)
+- [ ] Current required checks read with `gh api` — no stale `…, <old-nvmrc>)` contexts after the update
+- [ ] PATCH applied with `checks` (`app_id`s kept), or confirmed already correct
 - [ ] Handoff mentions branch protection if `.nvmrc` changed
