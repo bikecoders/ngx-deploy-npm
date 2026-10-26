@@ -20,6 +20,16 @@
 | Nx × Node matrix    | https://nx.dev/docs/technologies/node/introduction |
 | Node release status | https://nodejs.org/en/about/previous-releases      |
 
+The live page renders client-side and some fetch tools return it empty. If so, read the docs source directly: `https://raw.githubusercontent.com/nrwl/nx/<tag>/astro-docs/src/content/docs/technologies/node/introduction.mdoc` (use `master` for the latest).
+
+### Workspace major missing from the table
+
+The docs can lag a release (Nx 24.0.x shipped with the table still topped by 23.x). When the workspace major has no row:
+
+1. Check the docs at the release tag (raw URL above with `<tag>` = e.g. `24.0.1`) and the GitHub release notes (`https://api.github.com/repos/nrwl/nx/releases/tags/<version>`) for added or dropped Node versions.
+2. If neither says otherwise, infer the previous major's Node set. Nx drops Node versions only in a major release, so a dropped version would appear in the release notes.
+3. Say so in the YAML comments (backwards-compat `''` tier, basic-test, e2e-test), e.g. `Nx docs have no 24.x row yet; same Node set as 23.x`, and flag it in the handoff.
+
 ## How `nx-version` resolves (one row per supported major)
 
 **We support every Nx major from the minimum in `packages/ngx-deploy-npm` `peerDependencies` up through the workspace major, and we test all of them** — not just current/previous/minimum. `''` and `'previous'` are tags; every other supported major in between gets its own pinned-semver row.
@@ -113,6 +123,8 @@ npm view nx@<major>.<latest-minor>.<latest-patch> deprecated
 # confirm it's not deprecated; if it is, step back one patch
 ```
 
+**Confirm the pinned patch supports every Node row.** Nx adds Node versions in patch or minor releases, so the docs row describes the major's _latest_ state. Example: Node 26 joined the 22.x row only in 22.7.2. Check the docs at the pinned tag (raw URL in the sources section) and keep only the Node versions that tag lists. This matters most when you step back a patch because of a deprecation.
+
 **When `previous` moves up** (new Nx major released on npm), the major that dropped off `previous` keeps (or gains) its own pinned row at latest patch — it's still in the supported range, just no longer reachable via the `previous` tag.
 
 Example: workspace was on **20**, you migrated to **21**; `previous` now tracks **20** on npm, so **20** stays covered by the `previous` tag; a prior pinned **20.x** row (if any) becomes redundant and should be removed, while **19** keeps its own pinned row.
@@ -142,10 +154,10 @@ Set `devDependencies["@types/node"]` to `^<major>.<latest-patch>` (e.g. `^24.12.
 
 - [ ] Migrations finished; `package.json` nx version is the new major for this run
 - [ ] Fetched Nx and Node release pages
-- [ ] `''` tier: all nodes for **workspace** major; comment updated
+- [ ] `''` tier: all nodes for **workspace** major; comment updated (if the docs lack its row: checked tag docs + release notes, inferred, and said so in comments)
 - [ ] `previous` tier: yaml `'previous'`; nodes for tag major from npm
 - [ ] Every major from the peer-dependency minimum through the workspace major has a row — `''`, `previous`, or a pinned semver; no gaps
-- [ ] Each pinned row uses the latest non-deprecated patch of its major
+- [ ] Each pinned row uses the latest non-deprecated patch of its major, and that tag's docs list every Node version in the row
 - [ ] No duplicate `(nx-version, node-version)` pairs; no tiers above workspace major
 - [ ] `.nvmrc` matches workspace major ∩ LTS
 - [ ] Root `@types/node` major matches `.nvmrc` (bump if `nx migrate` left an older major)
