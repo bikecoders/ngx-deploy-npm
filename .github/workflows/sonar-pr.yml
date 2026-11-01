@@ -27,7 +27,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download reports
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             async function downloadArtifact(artifactName) {
