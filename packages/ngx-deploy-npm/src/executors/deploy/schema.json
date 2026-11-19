@@ -60,6 +60,11 @@
       "type": "boolean",
       "description": "When true, only run the checkExisting duplicate version check when publishing to a non-latest tag",
       "default": false
+    },
+    "checkPublishReady": {
+      "type": "string",
+      "description": "Pre-publish validation: 'probe' exits after validation; 'publish' continues to npm publish. With deploy dryRun, both run a second publish dry-run using package.json version.",
+      "enum": ["probe", "publish"]
     }
   },
   "required": ["distFolderPath"]

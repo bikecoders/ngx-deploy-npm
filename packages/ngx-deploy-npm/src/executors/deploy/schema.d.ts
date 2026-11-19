@@ -47,4 +47,14 @@ export interface DeployExecutorOptions {
    * When true, only run the checkExisting duplicate version check when publishing to a non-latest tag
    */
   checkTag?: boolean;
+  /**
+   * Pre-publish validation mode. Both values run static checks, npm whoami, and a registry
+   * probe (npm publish --dry-run with a disposable {version}-verify.{timestamp}).
+   * - `probe`: exit after validation (typical pre-bump CI).
+   * - `publish`: continue to checkExisting and npm publish after validation.
+   * With deploy `dryRun`, both values log a warning and run a second npm publish --dry-run
+   * using the version in dist package.json (in addition to the probe dry-run).
+   * Complements checkExisting; does not replace it.
+   */
+  checkPublishReady?: 'probe' | 'publish';
 }

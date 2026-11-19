@@ -355,6 +355,37 @@ If it exists and `--check-existing=skip`, it will skip the publishing silently (
 When set, the duplicate version check only runs when publishing to a non-`latest` tag.
 Publishing with the default `latest` tag (or without `--tag`) skips the check even if `--check-existing` is set.
 
+#### `--check-publish-ready`
+
+- **optional**
+- Values: `probe` | `publish`
+- Example:
+  - `nx deploy my-lib --check-publish-ready=probe`
+  - `nx deploy my-lib --check-publish-ready=publish`
+
+Pre-publish validation **before** `checkExisting` and `npm publish`:
+
+| Step             | What it checks                                                                                                                                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Static        | Dist folder exists; `package.json` is valid; `name` and `version` are set; entry files (`main`, `module`, `types`, `typings`, `exports`) exist under dist; warns if `description`, `license`, or `repository` are missing |
+| 2. Auth          | `npm whoami` against the configured registry (clear error if not authenticated)                                                                                                                                           |
+| 3. Publish probe | `npm publish --dry-run` with a disposable version (`{version}-verify.{timestamp}` and dist-tag `verify`)                                                                                                                  |
+
+| Mode      | Typical use            | After validation                                                |
+| --------- | ---------------------- | --------------------------------------------------------------- |
+| `probe`   | Pre-bump CI verify job | Exit (no publish). Use when the dist version is not bumped yet. |
+| `publish` | Release / real publish | Continue to `checkExisting` (if set) and `npm publish`.         |
+
+**If you also pass deploy `--dry-run`:** that flag is independent of `--check-publish-ready`. Both can be used together. The executor logs a warning and runs **two** `npm publish --dry-run` calls: first with a disposable probe version, then with the version in dist `package.json`. The second dry-run may fail if that version is already on the registry.
+
+Examples:
+
+- **Pre-bump verify (no upload):** `nx build my-lib && nx deploy my-lib --check-publish-ready=probe`
+- **Release gate:** `nx deploy my-lib --check-publish-ready=publish`
+- **Probe + deploy dry-run (two dry-runs):** `nx deploy my-lib --check-publish-ready=probe --dry-run`
+
+Complements [`--check-existing`](#--check-existing); does not replace it.
+
 #### `--package-version`
 
 - **optional**
